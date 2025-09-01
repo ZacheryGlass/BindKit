@@ -9,6 +9,9 @@ on:
         default: 'patch'
         type: choice
         options: [patch, minor, major]
+  push:
+    paths:
+      - '.github/trigger'
 
 permissions:
   contents: write
