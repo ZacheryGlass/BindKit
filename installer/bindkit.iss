@@ -1,9 +1,9 @@
-; Inno Setup script for Desktop Utility GUI
+; Inno Setup script for BindKit
 
-#define MyAppName "Desktop Utility GUI"
+#define MyAppName "BindKit"
 #define MyAppExeName "DesktopUtilityGUI.exe"
 #define MyAppVersion GetStringParam("MyAppVersion", "0.0.0")
-#define MyPublisher "Desktop Utility GUI"
+#define MyPublisher "BindKit"
 
 [Setup]
 AppId={{B0DE5D8F-DAE9-4F28-9C22-4F996B0EDE16}}

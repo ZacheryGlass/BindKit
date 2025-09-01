@@ -8,5 +8,5 @@ if [ ! -d "venv" ]; then
     fi
 fi
 
-echo "Starting Desktop Utility GUI..."
+echo "Starting BindKit..."
 source venv/bin/activate && python main.py

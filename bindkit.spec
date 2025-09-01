@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec for Desktop Utility GUI (Windows)
+PyInstaller spec for BindKit (Windows)
 
 Produces an onedir distribution at dist/DesktopUtilityGUI/ with:
 - Embedded Windows version resources (from version_info.py when present)
@@ -55,7 +55,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='DesktopUtilityGUI',
+    name='BindKit',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -74,6 +74,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='DesktopUtilityGUI',
+    name='BindKit',
 )
-

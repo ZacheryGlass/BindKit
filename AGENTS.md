@@ -21,7 +21,7 @@ When a change removes or renames a user-facing option or API, include a `BREAKIN
 
 ## Project Overview
 
-Desktop Utility GUI is a PyQt6-based Windows system tray application that manages and executes utility scripts with global hotkey support. The application runs primarily from the system tray and provides a modular architecture for script execution.
+BindKit is a PyQt6-based Windows system tray application that manages and executes utility scripts with global hotkey support. The application runs primarily from the system tray and provides a modular architecture for script execution.
 
 ## Development Commands
 

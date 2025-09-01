@@ -1,6 +1,6 @@
 # Tutorial: Creating Custom Utility Scripts
 
-This tutorial covers creating scripts for the Desktop Utility GUI using both legacy UtilityScript classes and modern standalone scripts with global hotkey support.
+This tutorial covers creating scripts for BindKit using both legacy UtilityScript classes and modern standalone scripts with global hotkey support.
 
 ## Table of Contents
 1. [Quick Start](#quick-start)

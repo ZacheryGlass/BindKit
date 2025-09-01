@@ -1,4 +1,4 @@
-Releasing Desktop Utility GUI
+Releasing BindKit
 =============================
 
 This guide explains how to build and publish Windows releases (portable EXE and installer) using a one‑click GitHub Actions workflow.

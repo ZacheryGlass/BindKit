@@ -7,6 +7,6 @@ if not exist "venv" (
     )
 )
 
-echo Starting Desktop Utility GUI...
+echo Starting BindKit...
 call venv\Scripts\activate.bat && python main.py
 pause

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Standalone script to configure automatic startup for Desktop Utility GUI.
+Standalone script to configure automatic startup for BindKit.
 Can be run independently after setup to enable/disable startup.
 """
 
@@ -15,7 +15,7 @@ def setup_windows_startup(enable=True):
         import winreg
         
         key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-        app_name = "Desktop Utility GUI"
+        app_name = "BindKit"
         
         # Get the path to run.bat
         app_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run.bat")
@@ -42,7 +42,7 @@ def setup_linux_startup(enable=True):
     """Configure Linux startup using XDG autostart."""
     try:
         autostart_dir = os.path.expanduser("~/.config/autostart")
-        desktop_file = os.path.join(autostart_dir, "desktop-utility-gui.desktop")
+        desktop_file = os.path.join(autostart_dir, "bindkit.desktop")
         
         if enable:
             os.makedirs(autostart_dir, exist_ok=True)
@@ -52,12 +52,12 @@ def setup_linux_startup(enable=True):
             
             desktop_content = f"""[Desktop Entry]
 Type=Application
-Name=Desktop Utility GUI
+Name=BindKit
 Exec={app_path} --minimized
 Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
-Comment=Desktop Utility GUI Application
+Comment=BindKit Application
 Icon=utilities-system-monitor
 Categories=Utility;System;
 """
@@ -66,14 +66,14 @@ Categories=Utility;System;
                 f.write(desktop_content)
             
             os.chmod(desktop_file, 0o755)
-            print(f"✓ Enabled automatic startup for Desktop Utility GUI")
+            print(f"✓ Enabled automatic startup for BindKit")
             print(f"  Desktop file: {desktop_file}")
         else:
             if os.path.exists(desktop_file):
                 os.remove(desktop_file)
-                print(f"✓ Disabled automatic startup for Desktop Utility GUI")
+                print(f"✓ Disabled automatic startup for BindKit")
             else:
-                print("  Desktop Utility GUI was not set to start automatically")
+                print("  BindKit was not set to start automatically")
         return True
     except Exception as e:
         print(f"✗ Error configuring Linux startup: {e}")
@@ -85,7 +85,7 @@ def setup_macos_startup(enable=True):
         import subprocess
         
         launch_agents_dir = os.path.expanduser("~/Library/LaunchAgents")
-        plist_file = os.path.join(launch_agents_dir, "com.desktop-utility-gui.plist")
+        plist_file = os.path.join(launch_agents_dir, "com.bindkit.plist")
         
         if enable:
             os.makedirs(launch_agents_dir, exist_ok=True)
@@ -98,7 +98,7 @@ def setup_macos_startup(enable=True):
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.desktop-utility-gui</string>
+    <string>com.bindkit</string>
     <key>ProgramArguments</key>
     <array>
         <string>{app_path}</string>
@@ -107,9 +107,9 @@ def setup_macos_startup(enable=True):
     <key>RunAtLoad</key>
     <true/>
     <key>StandardErrorPath</key>
-    <string>/tmp/desktop-utility-gui.err</string>
+    <string>/tmp/bindkit.err</string>
     <key>StandardOutPath</key>
-    <string>/tmp/desktop-utility-gui.out</string>
+    <string>/tmp/bindkit.out</string>
     <key>WorkingDirectory</key>
     <string>{os.path.dirname(app_path)}</string>
 </dict>
@@ -120,16 +120,16 @@ def setup_macos_startup(enable=True):
             
             # Load the launch agent
             subprocess.run(['launchctl', 'load', plist_file], check=False, capture_output=True)
-            print(f"✓ Enabled automatic startup for Desktop Utility GUI")
+            print(f"✓ Enabled automatic startup for BindKit")
             print(f"  LaunchAgent: {plist_file}")
         else:
             if os.path.exists(plist_file):
                 # Unload the launch agent
                 subprocess.run(['launchctl', 'unload', plist_file], check=False, capture_output=True)
                 os.remove(plist_file)
-                print(f"✓ Disabled automatic startup for Desktop Utility GUI")
+                print(f"✓ Disabled automatic startup for BindKit")
             else:
-                print("  Desktop Utility GUI was not set to start automatically")
+                print("  BindKit was not set to start automatically")
         return True
     except Exception as e:
         print(f"✗ Error configuring macOS startup: {e}")
@@ -143,7 +143,7 @@ def check_startup_status():
         try:
             import winreg
             key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-            app_name = "Desktop Utility GUI"
+            app_name = "BindKit"
             
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_QUERY_VALUE) as key:
                 try:
@@ -184,7 +184,7 @@ def check_startup_status():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Configure automatic startup for Desktop Utility GUI"
+        description="Configure automatic startup for BindKit"
     )
     parser.add_argument(
         'action',
@@ -194,7 +194,7 @@ def main():
     
     args = parser.parse_args()
     
-    print("Desktop Utility GUI - Startup Configuration")
+    print("BindKit - Startup Configuration")
     print("=" * 45)
     print()
     

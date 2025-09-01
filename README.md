@@ -1,4 +1,4 @@
-# Desktop Utility GUI
+# BindKit
 
 A modular PyQt6 desktop application that runs as a system tray utility, managing and executing desktop scripts with global hotkey support and flexible execution strategies.
 

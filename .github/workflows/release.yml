@@ -79,12 +79,12 @@ VSVersionInfo(
       StringTable(
         u'040904B0',
         [
-          StringStruct(u'CompanyName', u'Desktop Utility GUI'),
-          StringStruct(u'FileDescription', u'Desktop Utility GUI - System Tray Script Manager'),
+          StringStruct(u'CompanyName', u'BindKit'),
+          StringStruct(u'FileDescription', u'BindKit - System Tray Script Manager'),
           StringStruct(u'FileVersion', u'$ver.0'),
-          StringStruct(u'InternalName', u'DesktopUtilityGUI'),
-          StringStruct(u'OriginalFilename', u'DesktopUtilityGUI.exe'),
-          StringStruct(u'ProductName', u'Desktop Utility GUI'),
+          StringStruct(u'InternalName', u'BindKit'),
+          StringStruct(u'OriginalFilename', u'BindKit.exe'),
+          StringStruct(u'ProductName', u'BindKit'),
           StringStruct(u'ProductVersion', u'$ver.0')
         ])
       ]),
@@ -107,7 +107,7 @@ VSVersionInfo(
       - name: Build executable with PyInstaller (spec)
         shell: pwsh
         run: |
-          pyinstaller --noconfirm --clean desktop_utility_gui.spec
+          pyinstaller --noconfirm --clean bindkit.spec
 
       - name: Install Inno Setup
         shell: pwsh
@@ -118,7 +118,7 @@ VSVersionInfo(
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $iscc "installer\desktop_utility_gui.iss" /DMyAppVersion=${{ env.VERSION }}
+          & $iscc "installer\bindkit.iss" /DMyAppVersion=${{ env.VERSION }}
 
       - name: Create GitHub Release and upload artifacts
         uses: softprops/action-gh-release@v2
@@ -126,7 +126,7 @@ VSVersionInfo(
           tag_name: v${{ env.VERSION }}
           name: v${{ env.VERSION }}
           files: |
-            installer/output/DesktopUtilityGUI-${{ env.VERSION }}-Setup.exe
-            dist/DesktopUtilityGUI/DesktopUtilityGUI.exe
+            installer/output/BindKit-${{ env.VERSION }}-Setup.exe
+            dist/BindKit/BindKit.exe
           draft: false
           prerelease: false

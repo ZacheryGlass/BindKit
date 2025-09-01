@@ -1,7 +1,7 @@
 # Global Hotkey Feature
 
 ## Overview
-The Desktop Utility GUI now supports global keyboard hotkeys that allow you to execute scripts directly from anywhere in Windows, without needing to open the system tray menu.
+BindKit now supports global keyboard hotkeys that allow you to execute scripts directly from anywhere in Windows, without needing to open the system tray menu.
 
 ## How to Configure Hotkeys
 

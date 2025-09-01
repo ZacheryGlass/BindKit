@@ -1,5 +1,5 @@
 """
-Main entry point for Desktop Utility GUI using MVC architecture.
+Main entry point for BindKit using MVC architecture.
 
 This file sets up the MVC components and coordinates the application startup
 while maintaining clear separation of concerns.
@@ -608,7 +608,7 @@ class MVCApplication:
 def main():
     """Main entry point"""
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Desktop Utility GUI')
+    parser = argparse.ArgumentParser(description='BindKit')
     parser.add_argument('--minimized', action='store_true', 
                        help='Start minimized to system tray')
     args = parser.parse_args()
@@ -630,7 +630,7 @@ def main():
     app = SingleApplication(sys.argv, 'DesktopUtilityGUI-SingleInstance')
     
     # Set application identity before accessing QSettings
-    app.setApplicationName("Desktop Utility GUI")
+    app.setApplicationName("BindKit")
     app.setOrganizationName("DesktopUtils")
     
     # Honor the user's single-instance setting
@@ -645,7 +645,7 @@ def main():
             QMessageBox.information(
                 None,
                 "Already Running",
-                "Desktop Utility GUI is already running in the system tray."
+                "BindKit is already running in the system tray."
             )
             sys.exit(0)
     except Exception as e:

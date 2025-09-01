@@ -1,4 +1,4 @@
-# Desktop Utility GUI - Architecture Documentation
+# BindKit - Architecture Documentation
 
 ## Table of Contents
 1. [Overview](#overview)
@@ -12,7 +12,7 @@
 
 ## Overview
 
-The Desktop Utility GUI is a modular PyQt6 application that automatically discovers and manages desktop utility scripts. It provides a dynamic, extensible interface where scripts can define their own UI controls and behaviors.
+BindKit is a modular PyQt6 application that automatically discovers and manages desktop utility scripts. It provides a dynamic, extensible interface where scripts can define their own UI controls and behaviors.
 
 ### Key Design Principles
 - **Modularity**: Scripts are independent modules that can be added/removed without affecting the core system

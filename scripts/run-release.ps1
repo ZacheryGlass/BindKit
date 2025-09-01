@@ -48,7 +48,7 @@ if ($isFirstRelease) {
 
 $predicted = if ($isFirstRelease) { '1.0.0' } else { Get-NextVersion -current $currentVersion -bump $Type }
 
-Write-Info "Releasing Desktop Utility GUI"
+Write-Info "Releasing BindKit"
 Write-Host "  Current VERSION: $([string]::IsNullOrEmpty($currentVersion) ? '(none)' : $currentVersion)"
 Write-Host "  Bump type      : $Type"
 Write-Host "  Next version   : v$predicted"

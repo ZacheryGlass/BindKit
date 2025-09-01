@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "Desktop Utility GUI Setup"
+echo "BindKit Setup"
 echo "========================="
 echo
 
@@ -45,7 +45,7 @@ echo "========================="
 echo
 
 # Ask about startup (Linux/Mac)
-echo "Would you like to run Desktop Utility GUI automatically when your system starts?"
+echo "Would you like to run BindKit automatically when your system starts?"
 read -p "Enter Y for Yes, N for No (default: N): " startup_choice
 
 if [[ "$startup_choice" =~ ^[Yy]$ ]]; then
@@ -59,29 +59,29 @@ if [[ "$startup_choice" =~ ^[Yy]$ ]]; then
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
         # Linux - create desktop entry for autostart
         mkdir -p ~/.config/autostart
-        cat > ~/.config/autostart/desktop-utility-gui.desktop << EOF
+        cat > ~/.config/autostart/bindkit.desktop << EOF
 [Desktop Entry]
 Type=Application
-Name=Desktop Utility GUI
+Name=BindKit
 Exec=$(pwd)/run.sh --minimized
 Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true
-Comment=Desktop Utility GUI Application
+Comment=BindKit Application
 EOF
-        echo "Desktop Utility GUI will now start automatically on Linux login."
-        echo "You can disable this by removing ~/.config/autostart/desktop-utility-gui.desktop"
+        echo "BindKit will now start automatically on Linux login."
+        echo "You can disable this by removing ~/.config/autostart/bindkit.desktop"
         
     elif [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS - create LaunchAgent
         mkdir -p ~/Library/LaunchAgents
-        cat > ~/Library/LaunchAgents/com.desktop-utility-gui.plist << EOF
+        cat > ~/Library/LaunchAgents/com.bindkit.plist << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.desktop-utility-gui</string>
+    <string>com.bindkit</string>
     <key>ProgramArguments</key>
     <array>
         <string>$(pwd)/run.sh</string>
@@ -90,15 +90,15 @@ EOF
     <key>RunAtLoad</key>
     <true/>
     <key>StandardErrorPath</key>
-    <string>/tmp/desktop-utility-gui.err</string>
+    <string>/tmp/bindkit.err</string>
     <key>StandardOutPath</key>
-    <string>/tmp/desktop-utility-gui.out</string>
+    <string>/tmp/bindkit.out</string>
 </dict>
 </plist>
 EOF
-        launchctl load ~/Library/LaunchAgents/com.desktop-utility-gui.plist 2>/dev/null
-        echo "Desktop Utility GUI will now start automatically on macOS login."
-        echo "You can disable this with: launchctl unload ~/Library/LaunchAgents/com.desktop-utility-gui.plist"
+        launchctl load ~/Library/LaunchAgents/com.bindkit.plist 2>/dev/null
+        echo "BindKit will now start automatically on macOS login."
+        echo "You can disable this with: launchctl unload ~/Library/LaunchAgents/com.bindkit.plist"
     else
         echo "Note: Automatic startup configuration not available for this OS."
         echo "You can manually add $(pwd)/run.sh to your system's startup applications."

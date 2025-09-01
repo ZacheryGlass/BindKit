@@ -1,5 +1,5 @@
 @echo off
-echo Desktop Utility GUI Setup
+echo BindKit Setup
 echo =========================
 echo.
 
@@ -48,7 +48,7 @@ echo =========================
 echo.
 
 REM Ask about startup
-echo Would you like to run Desktop Utility GUI automatically when Windows starts?
+echo Would you like to run BindKit automatically when Windows starts?
 set /p startup_choice="Enter Y for Yes, N for No (default: N): "
 
 if /i "%startup_choice%"=="Y" (
@@ -57,10 +57,10 @@ if /i "%startup_choice%"=="Y" (
     
     REM Create a simple Python script to enable startup
     call venv\Scripts\activate.bat
-    python -c "from core.startup_manager import StartupManager; sm = StartupManager('Desktop Utility GUI'); sm.enable(); print('Startup enabled successfully!')" 2>nul
+    python -c "from core.startup_manager import StartupManager; sm = StartupManager('BindKit'); sm.enable(); print('Startup enabled successfully!')" 2>nul
     
     if %errorlevel% equ 0 (
-        echo Desktop Utility GUI will now start automatically with Windows.
+        echo BindKit will now start automatically with Windows.
         echo You can disable this later in the application settings.
     ) else (
         echo Note: Could not enable automatic startup at this time.
