@@ -66,35 +66,35 @@ jobs:
           if ($parts.Length -ne 3) { Write-Error "Invalid version: $ver"; exit 1 }
           $major=[int]$parts[0]; $minor=[int]$parts[1]; $patch=[int]$parts[2]
           @"
-VSVersionInfo(
-  ffi=FixedFileInfo(
-    filevers=($major, $minor, $patch, 0),
-    prodvers=($major, $minor, $patch, 0),
-    mask=0x3f,
-    flags=0x0,
-    OS=0x40004,
-    fileType=0x1,
-    subtype=0x0,
-    date=(0, 0)
-    ),
-  kids=[
-    StringFileInfo([
-      StringTable(
-        u'040904B0',
-        [
-          StringStruct(u'CompanyName', u'BindKit'),
-          StringStruct(u'FileDescription', u'BindKit - System Tray Script Manager'),
-          StringStruct(u'FileVersion', u'$ver.0'),
-          StringStruct(u'InternalName', u'BindKit'),
-          StringStruct(u'OriginalFilename', u'BindKit.exe'),
-          StringStruct(u'ProductName', u'BindKit'),
-          StringStruct(u'ProductVersion', u'$ver.0')
-        ])
-      ]),
-    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
-  ]
-)
-"@ | Set-Content -Encoding utf8 version_info.py
+          VSVersionInfo(
+            ffi=FixedFileInfo(
+              filevers=($major, $minor, $patch, 0),
+              prodvers=($major, $minor, $patch, 0),
+              mask=0x3f,
+              flags=0x0,
+              OS=0x40004,
+              fileType=0x1,
+              subtype=0x0,
+              date=(0, 0)
+              ),
+            kids=[
+              StringFileInfo([
+                StringTable(
+                  u'040904B0',
+                  [
+                    StringStruct(u'CompanyName', u'BindKit'),
+                    StringStruct(u'FileDescription', u'BindKit - System Tray Script Manager'),
+                    StringStruct(u'FileVersion', u'$ver.0'),
+                    StringStruct(u'InternalName', u'BindKit'),
+                    StringStruct(u'OriginalFilename', u'BindKit.exe'),
+                    StringStruct(u'ProductName', u'BindKit'),
+                    StringStruct(u'ProductVersion', u'$ver.0')
+                  ])
+                ]),
+              VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+            ]
+          )
+          "@ | Set-Content -Encoding utf8 version_info.py
 
       - name: Commit version bump and tag
         shell: pwsh
