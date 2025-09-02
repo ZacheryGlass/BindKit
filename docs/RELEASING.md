@@ -6,7 +6,7 @@ This guide explains how to build and publish Windows releases (portable EXE and 
 Overview
 --------
 - Source of truth: `VERSION` at repo root (semantic: `X.Y.Z`).
-- The Release workflow bumps `VERSION`, creates a `vX.Y.Z` tag, builds the app with PyInstaller (using a spec), generates a Windows installer with Inno Setup, and attaches both artifacts to a GitHub Release.
+- The Release workflow bumps `VERSION`, creates a `vX.Y.Z` tag, builds the app with PyInstaller (using `bindkit.spec`), generates a Windows installer with Inno Setup, and attaches both artifacts to a GitHub Release.
 - The installer can optionally add a Startup shortcut so the app runs at login (launches with `--minimized`).
 
 One‑Click Release (GitHub)
@@ -17,14 +17,14 @@ One‑Click Release (GitHub)
 4. The workflow will:
    - Bump `VERSION`, commit `chore(release): vX.Y.Z`, and tag `vX.Y.Z`.
    - Generate `version_info.py` so the EXE embeds proper Windows version resources.
-   - Build the app via PyInstaller using `desktop_utility_gui.spec` (includes `scripts/` and `style.qss`).
-   - Build the Windows installer via Inno Setup.
-   - Create a GitHub Release and upload both the installer and the portable EXE.
+  - Build the app via PyInstaller using `bindkit.spec` (includes `scripts/` and `style.qss`).
+  - Build the Windows installer via Inno Setup.
+  - Create a GitHub Release and upload both the installer and the portable EXE.
 
 Artifacts & Locations
 ---------------------
-- Portable EXE: `dist/DesktopUtilityGUI/DesktopUtilityGUI.exe`
-- Installer: `installer/output/DesktopUtilityGUI-X.Y.Z-Setup.exe`
+- Portable EXE: `dist/BindKit/BindKit.exe`
+- Installer: `installer/output/BindKit-X.Y.Z-Setup.exe`
 
 What’s Packaged
 ---------------
@@ -41,12 +41,12 @@ You can build locally on Windows for testing:
 1. Create the executable
    - `pip install -r requirements.txt`
    - `pip install pyinstaller`
-   - `pyinstaller --noconfirm --clean desktop_utility_gui.spec`
+   - `pyinstaller --noconfirm --clean bindkit.spec`
 
 2. Create the installer
    - Install Inno Setup (https://jrsoftware.org/isinfo.php)
-   - Build: `ISCC installer\desktop_utility_gui.iss /DMyAppVersion=0.0.0`
-   - Result: `installer/output/DesktopUtilityGUI-<version>-Setup.exe`
+   - Build: `ISCC installer\bindkit.iss /DMyAppVersion=0.0.0`
+   - Result: `installer/output/BindKit-<version>-Setup.exe`
 
 Versioning
 ----------
@@ -61,5 +61,5 @@ Startup Behavior
 Troubleshooting
 ---------------
 - Build time: OCR dependencies (e.g., EasyOCR/Torch) are large and increase build time.
-- Missing files at runtime: Ensure data files are listed in `desktop_utility_gui.spec` under `datas`.
+- Missing files at runtime: Ensure data files are listed in `bindkit.spec` under `datas`.
 - Packaging failures: If PyInstaller can’t find a module, add it to `hiddenimports` in the spec.

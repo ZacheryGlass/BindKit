@@ -2,7 +2,7 @@
 """
 PyInstaller spec for BindKit (Windows)
 
-Produces an onedir distribution at dist/DesktopUtilityGUI/ with:
+Produces an onedir distribution at dist/BindKit/ with:
 - Embedded Windows version resources (from version_info.py when present)
 - Included resources: style.qss and scripts/ directory
 - Hidden imports for common Windows + OCR deps

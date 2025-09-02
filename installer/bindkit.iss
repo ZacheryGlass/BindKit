@@ -1,7 +1,7 @@
 ; Inno Setup script for BindKit
 
 #define MyAppName "BindKit"
-#define MyAppExeName "DesktopUtilityGUI.exe"
+#define MyAppExeName "BindKit.exe"
 #define MyAppVersion GetStringParam("MyAppVersion", "0.0.0")
 #define MyPublisher "BindKit"
 
@@ -16,14 +16,14 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma
 SolidCompression=yes
 OutputDir=installer\output
-OutputBaseFilename=DesktopUtilityGUI-{#MyAppVersion}-Setup
+OutputBaseFilename=BindKit-{#MyAppVersion}-Setup
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64
 PrivilegesRequired=lowest
 
 [Files]
 ; Install the entire PyInstaller onedir output
-Source: "dist\DesktopUtilityGUI\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\BindKit\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
