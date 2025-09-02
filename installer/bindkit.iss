@@ -18,7 +18,8 @@ DefaultGroupName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma
 SolidCompression=yes
-OutputDir=installer\output
+; Paths are relative to this .iss file's directory
+OutputDir=output
 OutputBaseFilename=BindKit-{#MyAppVersion}-Setup
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64
@@ -26,7 +27,8 @@ PrivilegesRequired=lowest
 
 [Files]
 ; Install the entire PyInstaller onedir output
-Source: "dist\BindKit\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Point to the PyInstaller onedir output located one directory up
+Source: "..\dist\BindKit\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
