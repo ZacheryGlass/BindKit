@@ -10,6 +10,8 @@ import logging
 import argparse
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox
 from PyQt6.QtCore import Qt, QLockFile, QDir, QStandardPaths
+import signal
+import atexit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -56,6 +58,7 @@ class SingleApplication(QApplication):
         self._key = key
         self._running = False
         self._lock = None
+        self._cleanup_registered = False
 
         # Prepare a per-user lock file in a writable location
         # PyQt6 nests enums: use StandardLocation; fall back for older Qt
@@ -80,16 +83,50 @@ class SingleApplication(QApplication):
         if not dir_obj.exists():
             dir_obj.mkpath(".")
 
-        lock_path = dir_obj.filePath("desktop_utility_gui.lock")
+        # Use a clear, app-specific lock file name
+        lock_path = dir_obj.filePath("bindkit.lock")
         self._lock = QLockFile(lock_path)
         # Consider old locks stale to recover quickly after crashes
         self._lock.setStaleLockTime(10000)  # 10 seconds
 
         # Try to acquire lock immediately; if it fails, another instance is active
         if not self._lock.tryLock(0):
-            self._running = True
+            # Try to clear a stale lock left by an abnormal termination
+            try:
+                self._lock.removeStaleLockFile()
+            except Exception:
+                pass
+            # Try again after removing a stale lock
+            if not self._lock.tryLock(0):
+                self._running = True
+            else:
+                self._running = False
         else:
             self._running = False
+
+        # Ensure we release the lock on normal app quit
+        try:
+            self.aboutToQuit.connect(self._cleanup_lock)
+        except Exception:
+            pass
+
+        # Also register a process-exit handler as a best-effort cleanup
+        try:
+            if not self._cleanup_registered:
+                atexit.register(self._cleanup_lock)
+                self._cleanup_registered = True
+        except Exception:
+            pass
+
+        # Attempt to handle common termination signals for graceful cleanup
+        for sig in (getattr(signal, 'SIGINT', None), getattr(signal, 'SIGTERM', None)):
+            if sig is None:
+                continue
+            try:
+                signal.signal(sig, self._handle_signal)
+            except Exception:
+                # On some platforms, setting handlers may fail; ignore
+                pass
 
     def is_running(self) -> bool:
         return self._running
@@ -106,11 +143,22 @@ class SingleApplication(QApplication):
             self._running = False
 
     def __del__(self):
+        self._cleanup_lock()
+
+    def _cleanup_lock(self):
         try:
             if self._lock and self._lock.isLocked():
                 self._lock.unlock()
         except Exception:
             pass
+
+    def _handle_signal(self, signum, frame):
+        # Best-effort cleanup on termination signals
+        try:
+            self._cleanup_lock()
+        finally:
+            # Exit immediately to respect the signal
+            os._exit(0)
 
 
 class MVCApplication:
