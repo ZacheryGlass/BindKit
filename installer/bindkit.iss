@@ -2,7 +2,10 @@
 
 #define MyAppName "BindKit"
 #define MyAppExeName "BindKit.exe"
-#define MyAppVersion GetStringParam("MyAppVersion", "0.0.0")
+; Allow CI to pass /DMyAppVersion=1.2.3, with a local default
+#ifndef MyAppVersion
+#define MyAppVersion "0.0.0"
+#endif
 #define MyPublisher "BindKit"
 
 [Setup]
