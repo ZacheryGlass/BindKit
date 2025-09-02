@@ -48,6 +48,8 @@ jobs:
           if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') { Write-Error "Invalid tag format: $tag" }
           $ver = $tag.TrimStart('v')
           echo "VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          # Update VERSION file to match the tag
+          Set-Content -NoNewline -Path "VERSION" -Value $ver
 
       - name: Bump version
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -108,6 +110,20 @@ jobs:
             ]
           )
           "@ | Set-Content -Encoding utf8 version_info.py
+
+      - name: Commit VERSION file update (if tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add VERSION
+          if (git diff --cached --quiet) {
+            echo "No changes to VERSION file"
+          } else {
+            git commit -m "chore(release): update VERSION to v${{ env.VERSION }}"
+            git push origin HEAD:main
+          }
 
       - name: Commit version bump and tag
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
