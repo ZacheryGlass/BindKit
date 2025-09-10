@@ -5,6 +5,7 @@ import json
 import logging
 import time
 import weakref
+import gc
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
@@ -24,13 +25,13 @@ class ExecutionResult:
     data: Optional[Dict[str, Any]] = None
 
 class ScriptExecutor:
-    def __init__(self, settings=None, max_cache_size=50, cache_ttl_seconds=3600):
+    def __init__(self, settings=None, max_cache_size=20, cache_ttl_seconds=1800):
         # Use OrderedDict for LRU cache behavior
         self.loaded_modules = OrderedDict()
         self.module_access_times = {}  # Track last access time
         self.settings = settings
-        self.max_cache_size = max_cache_size  # Maximum number of cached modules
-        self.cache_ttl_seconds = cache_ttl_seconds  # Time-to-live in seconds (1 hour default)
+        self.max_cache_size = max_cache_size  # Maximum number of cached modules (reduced from 50 to 20)
+        self.cache_ttl_seconds = cache_ttl_seconds  # Time-to-live in seconds (reduced from 1 hour to 30 minutes)
         self._last_cleanup_time = time.time()
     
     def execute_script(self, script_info: ScriptInfo, arguments: Optional[Dict[str, Any]] = None) -> ExecutionResult:
@@ -325,8 +326,9 @@ class ScriptExecutor:
             # Remove least recently used (first item)
             oldest_name, oldest_module = self.loaded_modules.popitem(last=False)
             self.module_access_times.pop(oldest_name, None)
-            # Remove from sys.modules to allow garbage collection
-            sys.modules.pop(oldest_name, None)
+            
+            # Aggressive cleanup for evicted module
+            self._cleanup_module(oldest_name, oldest_module)
             logger.debug(f"Evicted module from cache: {oldest_name}")
         
         # Add new module
@@ -349,30 +351,78 @@ class ScriptExecutor:
             if current_time - last_access > self.cache_ttl_seconds:
                 stale_modules.append(module_name)
         
-        # Remove stale modules
+        # Remove stale modules with proper cleanup
         for module_name in stale_modules:
             if module_name in self.loaded_modules:
+                module = self.loaded_modules[module_name]
                 del self.loaded_modules[module_name]
                 del self.module_access_times[module_name]
-                sys.modules.pop(module_name, None)
+                
+                # Aggressive cleanup for stale module
+                self._cleanup_module(module_name, module)
                 logger.debug(f"Removed stale module from cache: {module_name}")
         
         if stale_modules:
-            logger.info(f"Cleaned up {len(stale_modules)} stale module(s) from cache")
+            # Force garbage collection after cleanup
+            collected = gc.collect()
+            logger.info(f"Cleaned up {len(stale_modules)} stale module(s) from cache, collected {collected} objects")
     
     def clear_module_cache(self):
         """Manually clear all cached modules."""
         count = len(self.loaded_modules)
         
-        # Remove all modules from sys.modules
+        # Remove all modules with proper cleanup
         for module_name in list(self.loaded_modules.keys()):
-            sys.modules.pop(module_name, None)
+            module = self.loaded_modules.get(module_name)
+            if module:
+                self._cleanup_module(module_name, module)
         
         self.loaded_modules.clear()
         self.module_access_times.clear()
         
-        logger.info(f"Cleared {count} module(s) from cache")
+        # Force garbage collection after clearing cache
+        collected = gc.collect()
+        logger.info(f"Cleared {count} module(s) from cache, collected {collected} objects")
         return count
+    
+    def _cleanup_module(self, module_name: str, module):
+        """Aggressively clean up a module to prevent memory retention.
+        
+        Args:
+            module_name: Name of the module being cleaned up
+            module: The module object to clean up
+        """
+        try:
+            # Remove from sys.modules first
+            sys.modules.pop(module_name, None)
+            
+            # Clear module's __dict__ to break circular references
+            if hasattr(module, '__dict__'):
+                module_dict = module.__dict__.copy()
+                module.__dict__.clear()
+                
+                # Explicitly delete references to help garbage collection
+                for key, value in module_dict.items():
+                    try:
+                        # Clear any callable objects that might hold references
+                        if hasattr(value, '__dict__'):
+                            value.__dict__.clear()
+                    except Exception:
+                        pass  # Some objects might not allow modification
+                del module_dict
+            
+            # Clear any cached attributes
+            if hasattr(module, '__cached__'):
+                module.__cached__ = None
+            if hasattr(module, '__spec__'):
+                module.__spec__ = None
+            if hasattr(module, '__loader__'):
+                module.__loader__ = None
+                
+            logger.debug(f"Aggressively cleaned up module: {module_name}")
+            
+        except Exception as e:
+            logger.warning(f"Error during aggressive module cleanup for {module_name}: {e}")
     
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get statistics about the module cache."""
