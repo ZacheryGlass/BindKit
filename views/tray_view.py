@@ -94,6 +94,9 @@ class TrayView(QObject):
             # Perform deep cleanup of existing menu objects
             self._cleanup_menu_objects()
             
+            # Force immediate cleanup to prevent accumulation
+            self._force_immediate_cleanup()
+            
             # Clear existing menu
             self.context_menu.clear()
             
@@ -125,9 +128,9 @@ class TrayView(QObject):
             
             logger.debug(f"Menu updated with {len(menu_items)} items")
             
-            # Perform periodic aggressive cleanup
+            # Perform aggressive cleanup every 5 updates instead of 10 for better memory management
             self._menu_update_count += 1
-            if self._menu_update_count % 10 == 0:
+            if self._menu_update_count % 5 == 0:
                 self._perform_aggressive_cleanup()
             
         except Exception as e:
@@ -249,6 +252,22 @@ class TrayView(QObject):
         except Exception as e:
             logger.error(f"Error during menu cleanup: {e}")
     
+    def _force_immediate_cleanup(self):
+        """Force immediate cleanup of Qt objects to prevent memory accumulation."""
+        try:
+            # Force Qt to process all pending deleteLater events immediately
+            from PyQt6.QtWidgets import QApplication
+            app = QApplication.instance()
+            if app:
+                # Process events multiple times to ensure all deleteLater objects are cleaned up
+                for _ in range(3):
+                    app.processEvents()
+                    
+            logger.debug("Immediate cleanup forced")
+            
+        except Exception as e:
+            logger.error(f"Error during immediate cleanup: {e}")
+
     def _perform_aggressive_cleanup(self):
         """Perform aggressive memory cleanup periodically."""
         try:
