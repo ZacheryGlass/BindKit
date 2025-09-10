@@ -161,6 +161,13 @@ class HotkeyManager(QObject):
                 # Verify widget was created successfully
                 if not hasattr(self.widget, 'hwnd') or not self.widget.hwnd:
                     logger.error("HotkeyWidget failed to create window handle")
+                    # Clean up partially created widget
+                    if self.widget:
+                        try:
+                            self.widget.hide()
+                            self.widget.deleteLater()
+                        except Exception:
+                            pass
                     self.widget = None
                     return False
                 
@@ -170,6 +177,13 @@ class HotkeyManager(QObject):
                 
             except Exception as e:
                 logger.error(f"Failed to start HotkeyManager: {e}")
+                # Clean up any partially created widget
+                if self.widget:
+                    try:
+                        self.widget.hide()
+                        self.widget.deleteLater()
+                    except Exception:
+                        pass
                 self.widget = None
                 return False
         else:
@@ -180,11 +194,20 @@ class HotkeyManager(QObject):
         """Stop the hotkey system and unregister all hotkeys"""
         logger.info("Stopping HotkeyManager...")
         
-        # Unregister all hotkeys
+        # Unregister all hotkeys first
         self.unregister_all()
+        
+        # Additional safety cleanup for orphaned hotkeys
+        self._cleanup_orphaned_hotkeys()
         
         # Clean up widget
         if self.widget:
+            try:
+                # Disconnect signal to prevent issues during cleanup
+                self.widget.hotkey_triggered.disconnect()
+            except Exception:
+                pass
+            
             self.widget.hide()
             self.widget.deleteLater()
             self.widget = None
@@ -330,9 +353,9 @@ class HotkeyManager(QObject):
             self.registration_failed.emit(script_name, hotkey_string, error_msg)
             return False
         
-        # Make sure widget is created
-        if not self.widget:
-            error_msg = "Hotkey system not started"
+        # Make sure widget is created and has a valid handle
+        if not self.widget or not self.widget.hwnd:
+            error_msg = "Hotkey system not started or widget handle invalid"
             logger.error(error_msg)
             self.registration_failed.emit(script_name, normalized, error_msg)
             return False
@@ -544,3 +567,33 @@ class HotkeyManager(QObject):
                 }
         
         return status_info
+    
+    def _cleanup_orphaned_hotkeys(self):
+        """
+        Cleanup any orphaned hotkey registrations that might exist.
+        
+        This method attempts to unregister hotkeys using a range of IDs
+        that might have been registered by previous instances or failed cleanup.
+        """
+        if not self.widget or not self.widget.hwnd:
+            return
+            
+        logger.debug("Cleaning up orphaned hotkey registrations...")
+        
+        # Try to unregister hotkeys in a reasonable range
+        # This covers hotkeys that might have been registered by previous runs
+        cleanup_count = 0
+        for hotkey_id in range(1, 100):  # Reasonable range for cleanup
+            try:
+                result = win32gui.UnregisterHotKey(self.widget.hwnd, hotkey_id)
+                if result != 0:  # Success
+                    cleanup_count += 1
+                    logger.debug(f"Cleaned up orphaned hotkey ID: {hotkey_id}")
+            except Exception:
+                # Ignore errors for non-existent hotkeys
+                pass
+        
+        if cleanup_count > 0:
+            logger.info(f"Cleaned up {cleanup_count} orphaned hotkey registrations")
+        else:
+            logger.debug("No orphaned hotkey registrations found")
