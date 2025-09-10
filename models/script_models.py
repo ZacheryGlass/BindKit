@@ -5,6 +5,7 @@ These models handle all script-related business logic while remaining
 UI-agnostic and providing signals for state changes.
 """
 import logging
+import threading
 from typing import List, Dict, Any, Optional, Set
 from pathlib import Path
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
@@ -257,6 +258,7 @@ class ScriptExecutionModel(QObject):
         
         self._execution_results: Dict[str, Dict[str, Any]] = {}
         self._active_workers: Dict[str, ScriptExecutionWorker] = {}  # Track active execution threads
+        self._worker_lock = threading.Lock()  # Protect worker dictionary from race conditions
         
         logger.info("ScriptExecutionModel initialized")
     
@@ -269,11 +271,12 @@ class ScriptExecutionModel(QObject):
             async_execution: If True, execute in background thread. If False, execute synchronously.
         """
         try:
-            # Check if script is already running
-            if script_name in self._active_workers:
-                logger.warning(f"Script {script_name} is already running")
-                self.script_execution_failed.emit(script_name, "Script is already running")
-                return False
+            # Check if script is already running (thread-safe)
+            with self._worker_lock:
+                if script_name in self._active_workers:
+                    logger.warning(f"Script {script_name} is already running")
+                    self.script_execution_failed.emit(script_name, "Script is already running")
+                    return False
             
             script_info = self._script_collection.get_script_by_name(script_name)
             if not script_info:
@@ -298,8 +301,9 @@ class ScriptExecutionModel(QObject):
                 worker.execution_failed.connect(lambda error: self._handle_execution_failed(script_name, error))
                 worker.finished.connect(lambda: self._cleanup_worker(script_name))
                 
-                # Store worker and start execution
-                self._active_workers[script_name] = worker
+                # Store worker and start execution (thread-safe)
+                with self._worker_lock:
+                    self._active_workers[script_name] = worker
                 worker.start()
                 
                 return True  # Execution started successfully
@@ -335,18 +339,48 @@ class ScriptExecutionModel(QObject):
         Returns:
             True if cancellation was requested, False if script was not running
         """
-        if script_name in self._active_workers:
-            logger.info(f"Cancelling script execution: {script_name}")
+        with self._worker_lock:
+            if script_name not in self._active_workers:
+                return False
             worker = self._active_workers[script_name]
-            worker.cancel()
-            worker.quit()
-            worker.wait(1000)  # Wait up to 1 second for thread to finish
-            if worker.isRunning():
-                worker.terminate()  # Force terminate if still running
-            self._cleanup_worker(script_name)
-            self.script_execution_failed.emit(script_name, "Execution cancelled by user")
-            return True
-        return False
+            
+        logger.info(f"Cancelling script execution: {script_name}")
+        
+        # Disconnect signals first to prevent race conditions
+        try:
+            worker.execution_completed.disconnect()
+            worker.execution_failed.disconnect()
+            worker.finished.disconnect()
+        except Exception:
+            pass  # Signals might already be disconnected
+        
+        # Request cancellation
+        worker.cancel()
+        
+        # Try graceful shutdown first
+        worker.quit()
+        graceful_exit = worker.wait(2000)  # Wait up to 2 seconds for graceful exit
+        
+        if graceful_exit:
+            # Thread exited gracefully, safe to clean up
+            self._cleanup_worker_safe(script_name, worker, terminated=False)
+        else:
+            # Force termination as last resort
+            logger.warning(f"Force terminating script thread: {script_name}")
+            worker.terminate()
+            force_exit = worker.wait(1000)  # Wait another second after termination
+            
+            if force_exit:
+                # Terminated successfully, but don't call deleteLater on terminated threads
+                self._cleanup_worker_safe(script_name, worker, terminated=True)
+            else:
+                # Thread is completely unresponsive, just remove from tracking
+                logger.error(f"Thread completely unresponsive: {script_name}")
+                with self._worker_lock:
+                    self._active_workers.pop(script_name, None)
+        
+        self.script_execution_failed.emit(script_name, "Execution cancelled by user")
+        return True
     
     def is_script_running(self, script_name: str) -> bool:
         """Check if a script is currently running.
@@ -357,7 +391,8 @@ class ScriptExecutionModel(QObject):
         Returns:
             True if script is running, False otherwise
         """
-        return script_name in self._active_workers
+        with self._worker_lock:
+            return script_name in self._active_workers
     
     def _handle_execution_completed(self, script_name: str, result: Dict[str, Any]):
         """Handle successful script execution completion."""
@@ -372,9 +407,35 @@ class ScriptExecutionModel(QObject):
     
     def _cleanup_worker(self, script_name: str):
         """Clean up worker thread after completion."""
-        if script_name in self._active_workers:
-            worker = self._active_workers.pop(script_name)
+        with self._worker_lock:
+            if script_name in self._active_workers:
+                worker = self._active_workers.pop(script_name)
+                # Only call deleteLater on threads that finished normally
+                if not worker.isRunning():
+                    worker.deleteLater()
+                else:
+                    logger.warning(f"Attempting cleanup of running thread: {script_name}")
+    
+    def _cleanup_worker_safe(self, script_name: str, worker: ScriptExecutionWorker, terminated: bool = False):
+        """Safely clean up worker thread with proper handling of terminated threads.
+        
+        Args:
+            script_name: Name of the script being cleaned up
+            worker: The worker thread to clean up
+            terminated: True if the thread was forcibly terminated
+        """
+        # Remove from active workers first (thread-safe)
+        with self._worker_lock:
+            self._active_workers.pop(script_name, None)
+        
+        if terminated:
+            # For terminated threads, don't call deleteLater as it can cause issues
+            # Just let Python's garbage collector handle it when references are gone
+            logger.debug(f"Cleaned up terminated thread: {script_name}")
+        else:
+            # For normally finished threads, use deleteLater
             worker.deleteLater()
+            logger.debug(f"Cleaned up finished thread: {script_name}")
     
     def execute_script_with_preset(self, script_name: str, preset_name: str, async_execution: bool = True) -> bool:
         """Execute a script with a specific preset configuration"""
