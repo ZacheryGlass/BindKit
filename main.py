@@ -249,6 +249,9 @@ class MVCApplication:
         self.logger.info("Shutting down MVC application...")
         
         try:
+            # Disconnect all signals first to prevent issues during cleanup
+            self._disconnect_all_signals()
+            
             # Clean up hotkey manager
             if self.hotkey_manager:
                 self.hotkey_manager.stop()
@@ -256,6 +259,19 @@ class MVCApplication:
             # Clean up views
             if self.tray_view:
                 self.tray_view.cleanup()
+            
+            # Clean up controllers and models
+            if self.tray_controller:
+                try:
+                    self.tray_controller.blockSignals(True)
+                except Exception:
+                    pass
+            
+            if self.script_controller:
+                try:
+                    self.script_controller.blockSignals(True)
+                except Exception:
+                    pass
             
             # Shutdown application
             if self.app_controller:
@@ -651,6 +667,67 @@ class MVCApplication:
         new_presets = settings_controller.get_script_presets(script_name)
         for preset_name, arguments in new_presets.items():
             preset_view.add_preset(preset_name, arguments)
+
+    def _disconnect_all_signals(self):
+        """Disconnect all signal connections to prevent issues during shutdown."""
+        try:
+            self.logger.debug("Disconnecting all signal connections...")
+            
+            # Disconnect tray controller signals
+            if self.tray_controller:
+                try:
+                    self.tray_controller.menu_structure_updated.disconnect()
+                    self.tray_controller.notification_display_requested.disconnect()
+                    self.tray_controller.settings_dialog_requested.disconnect()
+                    self.tray_controller.application_exit_requested.disconnect()
+                except Exception:
+                    pass  # Signal might already be disconnected
+            
+            # Disconnect tray view signals
+            if self.tray_view:
+                try:
+                    self.tray_view.menu_action_triggered.disconnect()
+                    self.tray_view.title_clicked.disconnect()
+                    self.tray_view.exit_requested.disconnect()
+                except Exception:
+                    pass
+            
+            # Disconnect hotkey manager signals
+            if self.hotkey_manager:
+                try:
+                    self.hotkey_manager.hotkey_triggered.disconnect()
+                    self.hotkey_manager.registration_failed.disconnect()
+                except Exception:
+                    pass
+            
+            # Disconnect model signals from controllers
+            if self.app_controller:
+                try:
+                    # Get models and disconnect their signals
+                    tray_model = self.app_controller.get_tray_model()
+                    if tray_model:
+                        tray_model.icon_visibility_changed.disconnect()
+                        tray_model.tooltip_changed.disconnect()
+                        tray_model.menu_update_requested.disconnect()
+                        tray_model.notification_requested.disconnect()
+                    
+                    script_execution = self.app_controller.get_script_execution_model()
+                    if script_execution:
+                        script_execution.script_execution_started.disconnect()
+                        script_execution.script_execution_completed.disconnect()
+                        script_execution.script_execution_failed.disconnect()
+                    
+                    hotkey_model = self.app_controller.get_hotkey_model()
+                    if hotkey_model:
+                        hotkey_model.hotkeys_changed.disconnect()
+                        
+                except Exception:
+                    pass
+                    
+            self.logger.debug("Signal disconnection completed")
+            
+        except Exception as e:
+            self.logger.warning(f"Error disconnecting signals: {e}")
 
 
 def main():

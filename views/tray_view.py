@@ -287,11 +287,25 @@ class TrayView(QObject):
     
     def cleanup(self):
         """Clean up resources"""
+        # Block signals to prevent issues during cleanup
+        try:
+            self.blockSignals(True)
+            if self.tray_icon:
+                self.tray_icon.blockSignals(True)
+        except Exception:
+            pass
+        
         # Clean up menu objects
         self._cleanup_menu_objects()
         
         # Clear the menu
         self.context_menu.clear()
+        
+        # Disconnect tray icon signals
+        try:
+            self.tray_icon.activated.disconnect()
+        except Exception:
+            pass
         
         # Hide tray icon
         self.tray_icon.hide()
