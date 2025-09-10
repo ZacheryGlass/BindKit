@@ -88,19 +88,49 @@ class ScriptExecutor:
         
         logger.debug(f"Executing command: {' '.join(cmd)}")
         
+        process = None
         try:
             used_timeout = self.settings.get_script_timeout_seconds() if self.settings else 30
-            result = subprocess.run(
+            
+            # Use Popen for better control over process lifecycle
+            process = subprocess.Popen(
                 cmd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=used_timeout,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
             )
             
-            success = result.returncode == 0
-            output = result.stdout.strip()
-            error = result.stderr.strip()
+            # Wait for completion with timeout
+            try:
+                stdout, stderr = process.communicate(timeout=used_timeout)
+                returncode = process.returncode
+            except subprocess.TimeoutExpired:
+                logger.warning(f"Script execution timed out, terminating process: {script_info.display_name}")
+                
+                # Attempt graceful termination first
+                try:
+                    process.terminate()
+                    stdout, stderr = process.communicate(timeout=5)  # Give 5 seconds for graceful exit
+                    returncode = process.returncode
+                except subprocess.TimeoutExpired:
+                    # Force kill if graceful termination failed
+                    logger.warning(f"Force killing unresponsive script process: {script_info.display_name}")
+                    process.kill()
+                    stdout, stderr = process.communicate()  # Clean up pipes
+                    returncode = process.returncode
+                
+                return ExecutionResult(
+                    success=False,
+                    error=f"Script execution timed out ({used_timeout} seconds)",
+                    output=stdout.strip() if stdout else "",
+                    error=stderr.strip() if stderr else "",
+                    return_code=returncode
+                )
+            
+            success = returncode == 0
+            output = stdout.strip() if stdout else ""
+            error = stderr.strip() if stderr else ""
             
             # Try to parse output as JSON for structured data
             data = None
@@ -119,20 +149,42 @@ class ScriptExecutor:
                 message=message,
                 output=output,
                 error=error,
-                return_code=result.returncode,
+                return_code=returncode,
                 data=data
             )
             
-        except subprocess.TimeoutExpired:
-            return ExecutionResult(
-                success=False,
-                error=f"Script execution timed out ({used_timeout} seconds)"
-            )
         except Exception as e:
+            # Ensure process is cleaned up on any exception
+            if process:
+                try:
+                    if process.poll() is None:  # Process is still running
+                        logger.warning(f"Cleaning up subprocess after exception: {script_info.display_name}")
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait()
+                except Exception as cleanup_error:
+                    logger.error(f"Error cleaning up subprocess: {cleanup_error}")
+            
             return ExecutionResult(
                 success=False,
                 error=f"Subprocess execution failed: {str(e)}"
             )
+        finally:
+            # Final cleanup to ensure no process handles are left open
+            if process:
+                try:
+                    # Ensure pipes are closed
+                    if process.stdout:
+                        process.stdout.close()
+                    if process.stderr:
+                        process.stderr.close()
+                    if process.stdin:
+                        process.stdin.close()
+                except Exception:
+                    pass
     
     def _execute_function_call(self, script_info: ScriptInfo, arguments: Dict[str, Any]) -> ExecutionResult:
         """Execute script by importing and calling main function."""
