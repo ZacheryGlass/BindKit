@@ -1,7 +1,3 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Conventional Commits
 
 We use Conventional Commits for all commit messages to keep history clear and tooling-friendly.
@@ -108,7 +104,7 @@ Based on AST analysis, scripts are executed using:
 Check `script_loader.py` logs - it shows which scripts are discovered and any loading errors.
 
 ### Test Hotkey Registration
-Use the included `scripts/power_plan.py` or create a simple test script that outputs to a file when triggered.
+Use one of the included scripts in `scripts/` (for example `snipping_tool.py`) or create a simple test script that outputs to a file when triggered.
 
 ### Modify Tray Menu Structure
 Edit `tray_manager.py` - the `update_tray_menu()` method builds the context menu dynamically.
