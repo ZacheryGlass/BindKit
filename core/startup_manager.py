@@ -8,7 +8,7 @@ from typing import Optional
 logger = logging.getLogger('Core.StartupManager')
 
 class StartupManager:
-    APP_NAME = "DesktopUtilityGUI"
+    APP_NAME = "BindKit"
     
     def __init__(self):
         self.startup_key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"

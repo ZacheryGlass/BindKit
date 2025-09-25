@@ -752,7 +752,7 @@ def main():
     
     # Create application with single-instance support
     app = None
-    app = SingleApplication(sys.argv, 'DesktopUtilityGUI-SingleInstance')
+    app = SingleApplication(sys.argv, 'BindKit-SingleInstance')
     
     # Set application identity before accessing QSettings
     app.setApplicationName("BindKit")
