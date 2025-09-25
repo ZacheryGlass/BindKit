@@ -41,7 +41,7 @@ class SettingsManager(QObject):
         },
         'script_presets': {
             # Script presets will be stored as 'script_presets/ScriptName/PresetName/ArgName': 'value'
-            # Example: 'script_presets/audio_toggle/Headphones/device': 'headphones'
+            # Example: 'script_presets/audio_output_toggle/Headphones/device': 'headphones'
             # This is just a placeholder for the schema
         },
         'external_scripts': {

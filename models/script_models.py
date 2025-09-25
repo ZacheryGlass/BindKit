@@ -410,11 +410,15 @@ class ScriptExecutionModel(QObject):
         with self._worker_lock:
             if script_name in self._active_workers:
                 worker = self._active_workers.pop(script_name)
+                # Always remove from active workers to prevent stuck status
                 # Only call deleteLater on threads that finished normally
                 if not worker.isRunning():
                     worker.deleteLater()
+                    logger.debug(f"Cleaned up finished worker thread: {script_name}")
                 else:
-                    logger.warning(f"Attempting cleanup of running thread: {script_name}")
+                    # Thread might still be finishing up - schedule cleanup for later
+                    logger.debug(f"Worker thread still running during cleanup: {script_name}")
+                    worker.deleteLater()  # Qt will handle cleanup when thread finishes
     
     def _cleanup_worker_safe(self, script_name: str, worker: ScriptExecutionWorker, terminated: bool = False):
         """Safely clean up worker thread with proper handling of terminated threads.
