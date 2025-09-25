@@ -1,5 +1,7 @@
 PyQt6>=6.4.0
 pywin32>=305
+# Audio device management
+pycaw>=20230407
 # OCR Screen Capture dependencies
 easyocr>=1.6.0
 Pillow>=9.0.0

@@ -122,7 +122,7 @@ class ScriptExecutor:
                 
                 return ExecutionResult(
                     success=False,
-                    error=f"Script execution timed out ({used_timeout} seconds)",
+                    message=f"Script execution timed out ({used_timeout} seconds)",
                     output=stdout.strip() if stdout else "",
                     error=stderr.strip() if stderr else "",
                     return_code=returncode
