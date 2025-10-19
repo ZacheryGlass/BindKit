@@ -128,7 +128,12 @@ class SettingsController(QObject):
                 presets[display_name] = script_presets
 
         return presets
-    
+
+    def _update_script_list(self):
+        """Update and emit the script list - called when script collection changes."""
+        scripts = self._load_script_configurations()
+        self.script_list_updated.emit(scripts)
+
     # Startup settings methods
     def set_run_on_startup(self, enabled: bool):
         """Enable or disable run on startup"""
@@ -273,17 +278,18 @@ class SettingsController(QObject):
             
             # Add the script
             success = self._script_controller.add_external_script(script_name, str(path))
-            
+
             if success:
-                # Refresh script list
-                self.script_list_updated.emit(self._load_script_configurations())
+                # Update the script list to reflect the new external script
+                # This will be properly forwarded to the view via script_list_updated signal
+                self._update_script_list()
                 logger.info(f"Successfully added external script: {script_name}")
             else:
                 self.error_occurred.emit(
                     "Add Failed",
                     f"Failed to add external script: {script_name}"
                 )
-            
+
             return success
             
         except Exception as e:
@@ -315,9 +321,9 @@ class SettingsController(QObject):
                         logger.info(f"Cleared hotkey for removed external script: {stem}")
                 except Exception as e:
                     logger.warning(f"Failed clearing hotkey for removed external script {stem}: {e}")
-            
-            # Refresh script list
-            self.script_list_updated.emit(self._load_script_configurations())
+
+            # Update the script list to reflect the removal
+            self._update_script_list()
             
         except Exception as e:
             logger.error(f"Error removing external script {script_name}: {e}")
