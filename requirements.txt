@@ -8,3 +8,5 @@ Pillow>=9.0.0
 pyautogui>=0.9.50
 # Memory monitoring
 psutil>=5.9.0
+# PyInstaller for building executables (pinned to avoid DLL loading issues)
+pyinstaller>=6.10.0,<7.0.0
