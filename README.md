@@ -180,3 +180,40 @@ The application comes with several example scripts:
 - **Global Hotkeys**: Windows API integration for system-wide shortcuts
 - **Script Analysis**: AST parsing for intelligent script execution
 - **Dual Script Support**: Both legacy classes and modern standalone scripts
+
+## Troubleshooting
+
+### "Failed to load Python DLL" Error on Windows
+
+If you encounter a "Failed to load Python DLL" error when running the BindKit executable, this is typically caused by conflicts between the bundled Python interpreter and other Python versions installed on your system.
+
+#### Solution
+
+1. **Check for Multiple Python Installations**: Ensure you don't have conflicting Python versions installed system-wide. BindKit includes its own Python interpreter and does not require a separate Python installation.
+
+2. **Clear Python DLL Cache**: If the error persists after ensuring no conflicts, try clearing your system's Python cache:
+   - Delete the folder: `C:\Users\<YourUsername>\AppData\Local\pyinstaller`
+   - Delete temporary files: Clear your Windows temp folder (`%temp%`)
+
+3. **Antivirus/Security Software**: Some antivirus software can interfere with DLL loading. Try adding the following to your antivirus exclusions:
+   - The BindKit installation directory
+   - `C:\Users\<YourUsername>\AppData\Local\Temp`
+
+4. **Run as Administrator**: Try running BindKit as Administrator:
+   - Right-click `BindKit.exe`
+   - Select "Run as administrator"
+
+5. **Clean Reinstall**: If none of the above works:
+   - Uninstall BindKit completely
+   - Restart your computer
+   - Reinstall BindKit fresh
+
+#### If Issues Persist
+
+If you still encounter the error after trying these steps, please report the issue at: https://github.com/your-repo/BindKit/issues
+
+Include the following information:
+- Your Windows version (Windows 10, 11, etc.)
+- Any Python installations you have on your system
+- The complete error message from the popup
+- Any antivirus/security software you're running

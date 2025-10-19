@@ -137,10 +137,47 @@ jobs:
           git push origin HEAD:${{ github.ref_name }}
           git push origin "v${{ env.VERSION }}"
 
+      - name: Clear PyInstaller cache
+        shell: pwsh
+        run: |
+          $cacheDir = "$env:LOCALAPPDATA\pyinstaller"
+          if (Test-Path $cacheDir) {
+            Write-Host "Clearing PyInstaller cache at $cacheDir"
+            Remove-Item -Recurse -Force $cacheDir
+          } else {
+            Write-Host "PyInstaller cache directory not found, skipping"
+          }
+
       - name: Build executable with PyInstaller (spec)
         shell: pwsh
         run: |
           pyinstaller --noconfirm --clean bindkit.spec
+
+      - name: Verify executable can load Python DLL
+        shell: pwsh
+        run: |
+          $exe = "dist\BindKit\BindKit.exe"
+          if (!(Test-Path $exe)) {
+            Write-Error "Executable not found at $exe"
+            exit 1
+          }
+          Write-Host "Testing if executable can start without DLL errors..."
+          # Start process with timeout to catch DLL loading errors
+          $proc = Start-Process -FilePath $exe -ArgumentList "--help" -PassThru -NoNewWindow -RedirectStandardOutput "build_test_stdout.txt" -RedirectStandardError "build_test_stderr.txt"
+          $timeout = 10
+          if (!$proc.WaitForExit($timeout * 1000)) {
+            Write-Host "Process started successfully (timed out after ${timeout}s, which is expected for GUI app)"
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+          }
+          # Check for DLL loading errors in output
+          if (Test-Path "build_test_stderr.txt") {
+            $stderr = Get-Content "build_test_stderr.txt" -Raw
+            if ($stderr -match "Failed to load Python DLL|Error loading Python DLL") {
+              Write-Error "Python DLL loading error detected:`n$stderr"
+              exit 1
+            }
+          }
+          Write-Host "Executable verification passed - no DLL loading errors detected"
 
       - name: Install Inno Setup
         shell: pwsh
