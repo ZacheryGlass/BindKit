@@ -51,6 +51,11 @@ class SettingsManager(QObject):
         'script_notifications': {
             # Per-script notification settings will be stored as 'script_notifications/ScriptName': boolean
             # This is just a placeholder for the schema
+        },
+        'service_config': {
+            # Service configuration will be stored as 'service_config/ScriptName/*'
+            # Fields: is_service, auto_start, auto_restart, max_restarts, restart_delay_seconds
+            # This is just a placeholder for the schema
         }
     }
     
@@ -635,5 +640,83 @@ class SettingsManager(QObject):
             self.settings.remove('')
             self.settings.sync()
             logger.info("Cleared all custom script names")
+        finally:
+            self.settings.endGroup()
+
+    # Service configuration methods
+    def is_script_service(self, script_name: str) -> bool:
+        """Check if a script is configured as a service."""
+        return self.get(f'service_config/{script_name}/is_service', False)
+
+    def set_service_enabled(self, script_name: str, enabled: bool) -> None:
+        """Enable or disable a script as a service."""
+        self.set(f'service_config/{script_name}/is_service', enabled)
+        logger.info(f"Script '{script_name}' service mode: {enabled}")
+
+    def get_service_config(self, script_name: str) -> Dict[str, Any]:
+        """Get complete service configuration for a script.
+
+        Returns:
+            Dictionary with keys: is_service, auto_start, auto_restart,
+            max_restarts, restart_delay_seconds
+        """
+        return {
+            'is_service': self.get(f'service_config/{script_name}/is_service', False),
+            'auto_start': self.get(f'service_config/{script_name}/auto_start', False),
+            'auto_restart': self.get(f'service_config/{script_name}/auto_restart', True),
+            'max_restarts': self.get(f'service_config/{script_name}/max_restarts', 3),
+            'restart_delay_seconds': self.get(f'service_config/{script_name}/restart_delay_seconds', 5)
+        }
+
+    def set_service_config(self, script_name: str, config: Dict[str, Any]) -> None:
+        """Set service configuration for a script."""
+        for key, value in config.items():
+            self.set(f'service_config/{script_name}/{key}', value)
+        logger.info(f"Updated service config for '{script_name}': {config}")
+
+    def set_service_auto_start(self, script_name: str, enabled: bool) -> None:
+        """Set whether a service should auto-start on application launch."""
+        self.set(f'service_config/{script_name}/auto_start', enabled)
+
+    def set_service_auto_restart(self, script_name: str, enabled: bool) -> None:
+        """Set whether a service should auto-restart on failure."""
+        self.set(f'service_config/{script_name}/auto_restart', enabled)
+
+    def set_service_max_restarts(self, script_name: str, max_restarts: int) -> None:
+        """Set maximum number of restart attempts for a service."""
+        self.set(f'service_config/{script_name}/max_restarts', max_restarts)
+
+    def set_service_restart_delay(self, script_name: str, delay_seconds: int) -> None:
+        """Set delay in seconds between restart attempts."""
+        self.set(f'service_config/{script_name}/restart_delay_seconds', delay_seconds)
+
+    def get_all_service_scripts(self) -> List[str]:
+        """Get list of all scripts configured as services."""
+        result = []
+        self.settings.beginGroup('service_config')
+        try:
+            for script_name in self.settings.childGroups():
+                if self.is_script_service(script_name):
+                    result.append(script_name)
+        finally:
+            self.settings.endGroup()
+        return result
+
+    def get_auto_start_services(self) -> List[str]:
+        """Get list of services that should auto-start on application launch."""
+        result = []
+        for script_name in self.get_all_service_scripts():
+            config = self.get_service_config(script_name)
+            if config['auto_start']:
+                result.append(script_name)
+        return result
+
+    def remove_service_config(self, script_name: str) -> None:
+        """Remove all service configuration for a script."""
+        self.settings.beginGroup(f'service_config/{script_name}')
+        try:
+            self.settings.remove('')
+            self.settings.sync()
+            logger.info(f"Removed service config for '{script_name}'")
         finally:
             self.settings.endGroup()

@@ -15,6 +15,7 @@ class ExecutionStrategy(Enum):
     SUBPROCESS = "subprocess"
     FUNCTION_CALL = "function_call"
     MODULE_EXEC = "module_exec"
+    SERVICE = "service"
 
 @dataclass
 class ArgumentInfo:
@@ -42,8 +43,8 @@ class ScriptInfo:
             self.arguments = []
 
 class ScriptAnalyzer:
-    def __init__(self):
-        pass
+    def __init__(self, settings=None):
+        self.settings = settings
     
     def analyze_script(self, script_path: Path) -> ScriptInfo:
         """Analyze a Python script to determine how to execute it and what arguments it needs."""
@@ -65,10 +66,16 @@ class ScriptAnalyzer:
             
             # Determine execution strategy
             execution_strategy = self._determine_execution_strategy(has_main_function, has_main_block, arguments)
-            
+
+            # Check if script is configured as a service (overrides normal execution strategy)
+            script_name = script_path.stem
+            if self.settings and self.settings.is_script_service(script_name):
+                execution_strategy = ExecutionStrategy.SERVICE
+                logger.info(f"Script '{script_name}' is configured as a service")
+
             # Determine if script needs configuration
             needs_configuration = self._determine_configuration_needs(arguments)
-            
+
             return ScriptInfo(
                 file_path=script_path,
                 display_name=display_name,
