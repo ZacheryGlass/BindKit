@@ -104,7 +104,8 @@ class ScriptLoader:
         logger.debug(f"Attempting to analyze: {script_file.name}")
         try:
             # Create a new analyzer instance for thread safety
-            analyzer = ScriptAnalyzer()
+            # Pass settings so analyzer can check service configuration
+            analyzer = ScriptAnalyzer(self.settings)
             return analyzer.analyze_script(script_file)
         except Exception as e:
             logger.error(f"Error in _analyze_single_script for {script_file.name}: {e}")
@@ -165,7 +166,8 @@ class ScriptLoader:
         try:
             script_file = Path(script_path)
             # Create a new analyzer instance for thread safety
-            analyzer = ScriptAnalyzer()
+            # Pass settings so analyzer can check service configuration
+            analyzer = ScriptAnalyzer(self.settings)
             return analyzer.analyze_script(script_file)
         except Exception as e:
             logger.error(f"Error in _analyze_external_script for {script_name}: {e}")

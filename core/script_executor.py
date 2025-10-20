@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from collections import OrderedDict
 
 from .script_analyzer import ScriptInfo, ExecutionStrategy, ArgumentInfo
+from .service_runtime import ServiceRuntime, ServiceHandle, ServiceState
 
 logger = logging.getLogger('Core.ScriptExecutor')
 
@@ -33,6 +34,10 @@ class ScriptExecutor:
         self.max_cache_size = max_cache_size  # Maximum number of cached modules (reduced from 50 to 20)
         self.cache_ttl_seconds = cache_ttl_seconds  # Time-to-live in seconds (reduced from 1 hour to 30 minutes)
         self._last_cleanup_time = time.time()
+
+        # Initialize service runtime for long-running scripts
+        self.service_runtime = ServiceRuntime()
+        logger.info("ScriptExecutor initialized with ServiceRuntime support")
     
     def execute_script(self, script_info: ScriptInfo, arguments: Optional[Dict[str, Any]] = None) -> ExecutionResult:
         """Execute a script using the appropriate strategy."""
@@ -57,6 +62,8 @@ class ScriptExecutor:
                 return self._execute_function_call(script_info, arguments)
             elif script_info.execution_strategy == ExecutionStrategy.MODULE_EXEC:
                 return self._execute_module(script_info, arguments)
+            elif script_info.execution_strategy == ExecutionStrategy.SERVICE:
+                return self._execute_service(script_info, arguments)
             else:
                 return ExecutionResult(
                     success=False,
@@ -333,12 +340,138 @@ class ScriptExecutor:
                 error=f"Module execution failed: {str(e)}"
             )
     
+    def _execute_service(self, script_info: ScriptInfo, arguments: Dict[str, Any]) -> ExecutionResult:
+        """Execute script as a long-running background service."""
+        try:
+            script_name = script_info.file_path.stem
+
+            # Check if service is already running
+            if self.service_runtime.is_running(script_name):
+                return ExecutionResult(
+                    success=False,
+                    error=f"Service '{script_name}' is already running"
+                )
+
+            # Start the service
+            handle = self.service_runtime.start_service(
+                script_name,
+                script_info.file_path,
+                arguments
+            )
+
+            return ExecutionResult(
+                success=True,
+                message=f"Service started with PID {handle.pid}",
+                data={
+                    'pid': handle.pid,
+                    'start_time': handle.start_time,
+                    'log_path': str(handle.log_file_path)
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Service execution failed: {str(e)}")
+            return ExecutionResult(
+                success=False,
+                error=f"Service execution failed: {str(e)}"
+            )
+
+    def stop_service(self, script_name: str, timeout: int = 10) -> ExecutionResult:
+        """Stop a running service.
+
+        Args:
+            script_name: Name of the service script (file stem)
+            timeout: Seconds to wait for graceful shutdown
+
+        Returns:
+            ExecutionResult indicating success or failure
+        """
+        try:
+            if not self.service_runtime.is_running(script_name):
+                return ExecutionResult(
+                    success=False,
+                    error=f"Service '{script_name}' is not running"
+                )
+
+            success = self.service_runtime.stop_service(script_name, timeout)
+
+            if success:
+                return ExecutionResult(
+                    success=True,
+                    message=f"Service '{script_name}' stopped"
+                )
+            else:
+                return ExecutionResult(
+                    success=False,
+                    error=f"Failed to stop service '{script_name}'"
+                )
+
+        except Exception as e:
+            logger.error(f"Error stopping service '{script_name}': {e}")
+            return ExecutionResult(
+                success=False,
+                error=f"Error stopping service: {str(e)}"
+            )
+
+    def restart_service(self, script_info: ScriptInfo, arguments: Optional[Dict[str, Any]] = None) -> ExecutionResult:
+        """Restart a running service.
+
+        Args:
+            script_info: ScriptInfo for the service
+            arguments: Optional arguments for the service
+
+        Returns:
+            ExecutionResult indicating success or failure
+        """
+        script_name = script_info.file_path.stem
+
+        # Stop the service if running
+        if self.service_runtime.is_running(script_name):
+            stop_result = self.stop_service(script_name)
+            if not stop_result.success:
+                return stop_result
+
+        # Start the service
+        return self._execute_service(script_info, arguments or {})
+
+    def get_service_status(self, script_name: str) -> ServiceState:
+        """Get the status of a service.
+
+        Args:
+            script_name: Name of the service script (file stem)
+
+        Returns:
+            ServiceState enum value
+        """
+        return self.service_runtime.get_status(script_name)
+
+    def get_all_services(self) -> Dict[str, ServiceHandle]:
+        """Get all active service handles."""
+        return self.service_runtime.get_all_services()
+
+    def is_service_running(self, script_name: str) -> bool:
+        """Check if a service is running.
+
+        Args:
+            script_name: Name of the service script (file stem)
+
+        Returns:
+            True if service is running, False otherwise
+        """
+        return self.service_runtime.is_running(script_name)
+
     def get_script_status(self, script_info: ScriptInfo) -> str:
         """Get current status of a script (if applicable)."""
         # For now, return a simple status
         if not script_info.is_executable:
             return "Error"
-        
+
+        # Check if script is a service and return service status
+        if script_info.execution_strategy == ExecutionStrategy.SERVICE:
+            script_name = script_info.file_path.stem
+            state = self.get_service_status(script_name)
+            return state.value.capitalize()
+
         # Could be enhanced to check actual status for toggle/cycle scripts
         return "Ready"
     
