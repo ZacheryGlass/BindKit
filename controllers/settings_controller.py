@@ -473,22 +473,198 @@ class SettingsController(QObject):
     def save_all_settings(self):
         """Save all current settings"""
         logger.info("Saving all settings...")
-        
+
         try:
             # Settings are automatically persisted by models when changed
             # This method is mainly for confirmation
-            
+
             valid, error_msg = self.validate_settings()
             if not valid:
                 self.error_occurred.emit("Validation Error", error_msg)
                 return
-            
+
             # Force sync to ensure everything is written
             self._settings_manager.sync()
-            
+
             self.settings_saved.emit()
             logger.info("All settings saved successfully")
-            
+
         except Exception as e:
             logger.error(f"Error saving settings: {e}")
             self.error_occurred.emit("Save Error", f"Failed to save settings: {str(e)}")
+
+    # Schedule management methods
+    def set_schedule_enabled(self, script_name: str, enabled: bool) -> bool:
+        """Enable or disable scheduling for a script.
+
+        Args:
+            script_name: Name of the script (display name or original name)
+            enabled: Whether to enable scheduling
+
+        Returns:
+            True if successful, False otherwise
+        """
+        logger.info(f"Setting schedule enabled for {script_name}: {enabled}")
+
+        try:
+            if enabled:
+                # When enabling, start the schedule
+                script_info = self._script_collection.get_script_by_name(script_name)
+                if not script_info:
+                    logger.error(f"Script not found: {script_name}")
+                    return False
+
+                script_stem = script_info.file_path.stem
+
+                # Get current interval from settings
+                interval_seconds = self._settings_manager.get_schedule_interval(script_stem)
+
+                # Mark as enabled in settings
+                self._script_controller.set_schedule_enabled(script_name, True)
+
+                # Start the schedule
+                success = self._script_controller.start_schedule(script_name, interval_seconds)
+
+                if success:
+                    logger.info(f"Schedule enabled for {script_name}")
+                    return True
+                else:
+                    # Revert setting if start failed
+                    self._script_controller.set_schedule_enabled(script_name, False)
+                    return False
+            else:
+                # When disabling, stop the schedule
+                script_info = self._script_collection.get_script_by_name(script_name)
+                if not script_info:
+                    logger.error(f"Script not found: {script_name}")
+                    return False
+
+                # Mark as disabled in settings
+                self._script_controller.set_schedule_enabled(script_name, False)
+
+                # Stop the schedule
+                success = self._script_controller.stop_schedule(script_name)
+
+                if success:
+                    logger.info(f"Schedule disabled for {script_name}")
+                    return True
+                else:
+                    logger.error(f"Failed to stop schedule for {script_name}")
+                    return False
+
+        except Exception as e:
+            logger.error(f"Error setting schedule enabled for {script_name}: {e}")
+            self.error_occurred.emit("Schedule Error", f"Failed to set schedule: {str(e)}")
+            return False
+
+    def set_schedule_interval(self, script_name: str, interval_seconds: int) -> bool:
+        """Set the execution interval for a scheduled script.
+
+        Args:
+            script_name: Name of the script (display name or original name)
+            interval_seconds: Interval in seconds
+
+        Returns:
+            True if successful, False otherwise
+        """
+        logger.info(f"Setting schedule interval for {script_name}: {interval_seconds}s")
+
+        try:
+            script_info = self._script_collection.get_script_by_name(script_name)
+            if not script_info:
+                logger.error(f"Script not found: {script_name}")
+                return False
+
+            script_stem = script_info.file_path.stem
+
+            # Update interval in settings
+            self._settings_manager.set_schedule_interval(script_stem, interval_seconds)
+
+            # If schedule is currently running, update it
+            executor = self._script_execution._executor
+            if executor and executor.is_schedule_running(script_stem):
+                # Stop and restart with new interval
+                executor.schedule_runtime.update_interval(script_stem, interval_seconds)
+                logger.info(f"Updated running schedule for {script_name} to {interval_seconds}s")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error setting schedule interval for {script_name}: {e}")
+            self.error_occurred.emit("Schedule Error", f"Failed to set interval: {str(e)}")
+            return False
+
+    def run_scheduled_script_now(self, script_name: str) -> bool:
+        """Manually trigger a scheduled script to run immediately.
+
+        Args:
+            script_name: Name of the script (display name or original name)
+
+        Returns:
+            True if execution started successfully, False otherwise
+        """
+        logger.info(f"Running scheduled script now: {script_name}")
+
+        try:
+            # Just execute the script normally
+            self._script_controller.execute_script(script_name)
+            return True
+
+        except Exception as e:
+            logger.error(f"Error running scheduled script: {e}")
+            self.error_occurred.emit("Execution Error", f"Failed to run script: {str(e)}")
+            return False
+
+    def get_schedule_info_for_display(self, script_name: str) -> Optional[Dict[str, Any]]:
+        """Get schedule information formatted for UI display.
+
+        Args:
+            script_name: Name of the script (display name or original name)
+
+        Returns:
+            Dictionary with formatted schedule info, or None if not found
+        """
+        try:
+            script_info = self._script_collection.get_script_by_name(script_name)
+            if not script_info:
+                return None
+
+            script_stem = script_info.file_path.stem
+            config = self._settings_manager.get_schedule_config(script_stem)
+
+            from datetime import datetime
+
+            interval_seconds = config.get('interval_seconds', 3600)
+            last_run = config.get('last_run')
+            next_run = config.get('next_run')
+
+            # Format interval for display
+            if interval_seconds < 60:
+                interval_display = f"{interval_seconds} seconds"
+            elif interval_seconds < 3600:
+                minutes = interval_seconds // 60
+                interval_display = f"{minutes} minute{'s' if minutes != 1 else ''}"
+            elif interval_seconds < 86400:
+                hours = interval_seconds // 3600
+                interval_display = f"{hours} hour{'s' if hours != 1 else ''}"
+            else:
+                days = interval_seconds // 86400
+                interval_display = f"{days} day{'s' if days != 1 else ''}"
+
+            # Format timestamps for display
+            last_run_display = "Never" if not last_run else datetime.fromtimestamp(last_run).strftime("%Y-%m-%d %H:%M:%S")
+            next_run_display = "Not scheduled" if not next_run else datetime.fromtimestamp(next_run).strftime("%Y-%m-%d %H:%M:%S")
+
+            return {
+                'enabled': config.get('enabled', False),
+                'interval_seconds': interval_seconds,
+                'interval_display': interval_display,
+                'last_run': last_run,
+                'last_run_display': last_run_display,
+                'next_run': next_run,
+                'next_run_display': next_run_display
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting schedule info for {script_name}: {e}")
+            return None

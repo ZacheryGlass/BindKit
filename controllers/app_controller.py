@@ -82,25 +82,34 @@ class AppController(QObject):
     def finalize_startup(self):
         """Complete application startup and emit ready signal"""
         logger.info("Finalizing application startup...")
-        
+
         try:
+            # Start all scheduled scripts
+            self._start_scheduled_scripts()
+
             # Show startup notification if appropriate
             if self._app_model.is_start_minimized():
                 self._notification_model.show_startup_notification()
-            
+
             self.application_ready.emit()
             logger.info("Application startup complete")
-            
+
         except Exception as e:
             logger.error(f"Error during startup finalization: {e}")
     
     def shutdown_application(self):
         """Gracefully shut down the application"""
         logger.info("Shutting down application...")
-        
+
+        # Stop all scheduled scripts
+        try:
+            self._stop_scheduled_scripts()
+        except Exception as e:
+            logger.error(f"Error stopping scheduled scripts: {e}")
+
         self.application_shutting_down.emit()
         self._app_model.shutdown_application()
-        
+
         # Clean up models
         try:
             self._tray_model.hide_icon()
@@ -202,3 +211,95 @@ class AppController(QObject):
         """Handle behavior settings changes"""
         logger.debug(f"Behavior settings changed: {settings}")
         # This can trigger various UI updates through other controllers
+
+    def _start_scheduled_scripts(self):
+        """Start all scheduled scripts at application startup"""
+        logger.info("Starting scheduled scripts...")
+
+        try:
+            if not self._script_controller:
+                logger.warning("ScriptController not available for scheduling")
+                return
+
+            # Get all scripts that have scheduling enabled
+            scheduled_scripts = self._script_execution._executor.settings_manager.get_all_scheduled_scripts()
+
+            if not scheduled_scripts:
+                logger.info("No scheduled scripts configured")
+                return
+
+            logger.info(f"Found {len(scheduled_scripts)} scheduled script(s)")
+
+            for script_stem in scheduled_scripts:
+                try:
+                    # Get the script info by stem
+                    script_info = None
+                    for script in self._script_collection.get_all_scripts():
+                        if script.file_path.stem == script_stem:
+                            script_info = script
+                            break
+
+                    if not script_info:
+                        logger.warning(f"Scheduled script not found: {script_stem}")
+                        continue
+
+                    # Get interval from settings
+                    interval_seconds = self._script_execution._executor.settings_manager.get_schedule_interval(script_stem)
+
+                    # Start the schedule via ScriptController
+                    display_name = self._script_collection.get_script_display_name(script_info)
+                    success = self._script_controller.start_schedule(display_name, interval_seconds)
+
+                    if success:
+                        logger.info(f"Started schedule for '{display_name}' (interval: {interval_seconds}s)")
+                    else:
+                        logger.error(f"Failed to start schedule for '{display_name}'")
+
+                except Exception as e:
+                    logger.error(f"Error starting schedule for '{script_stem}': {e}")
+
+            logger.info("Scheduled scripts startup complete")
+
+        except Exception as e:
+            logger.error(f"Error starting scheduled scripts: {e}")
+
+    def _stop_scheduled_scripts(self):
+        """Stop all active scheduled scripts before application shutdown"""
+        logger.info("Stopping scheduled scripts...")
+
+        try:
+            if not self._script_controller:
+                logger.warning("ScriptController not available for shutdown")
+                return
+
+            executor = self._script_execution._executor
+            if not executor:
+                logger.warning("ScriptExecutor not available")
+                return
+
+            # Get all active schedules
+            active_schedules = executor.get_all_schedules()
+
+            if not active_schedules:
+                logger.info("No active schedules to stop")
+                return
+
+            logger.info(f"Stopping {len(active_schedules)} active schedule(s)")
+
+            for script_stem in list(active_schedules.keys()):
+                try:
+                    # Stop the schedule via ScriptController
+                    success = self._script_controller.stop_schedule(script_stem)
+
+                    if success:
+                        logger.info(f"Stopped schedule for '{script_stem}'")
+                    else:
+                        logger.error(f"Failed to stop schedule for '{script_stem}'")
+
+                except Exception as e:
+                    logger.error(f"Error stopping schedule for '{script_stem}': {e}")
+
+            logger.info("Scheduled scripts shutdown complete")
+
+        except Exception as e:
+            logger.error(f"Error stopping scheduled scripts: {e}")

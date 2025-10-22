@@ -13,6 +13,7 @@ from collections import OrderedDict
 
 from .script_analyzer import ScriptInfo, ExecutionStrategy, ArgumentInfo
 from .service_runtime import ServiceRuntime, ServiceHandle, ServiceState
+from .schedule_runtime import ScheduleRuntime, ScheduleHandle
 
 logger = logging.getLogger('Core.ScriptExecutor')
 
@@ -37,7 +38,11 @@ class ScriptExecutor:
 
         # Initialize service runtime for long-running scripts
         self.service_runtime = ServiceRuntime()
-        logger.info("ScriptExecutor initialized with ServiceRuntime support")
+
+        # Initialize schedule runtime for periodic script execution
+        self.schedule_runtime = ScheduleRuntime()
+
+        logger.info("ScriptExecutor initialized with ServiceRuntime and ScheduleRuntime support")
     
     def execute_script(self, script_info: ScriptInfo, arguments: Optional[Dict[str, Any]] = None) -> ExecutionResult:
         """Execute a script using the appropriate strategy."""
@@ -459,6 +464,124 @@ class ScriptExecutor:
             True if service is running, False otherwise
         """
         return self.service_runtime.is_running(script_name)
+
+    def start_scheduled_execution(self, script_info: ScriptInfo, interval_seconds: int, arguments: Optional[Dict[str, Any]] = None) -> ExecutionResult:
+        """Start scheduled periodic execution of a script.
+
+        Args:
+            script_info: ScriptInfo for the script
+            interval_seconds: Interval between executions in seconds
+            arguments: Optional script arguments
+
+        Returns:
+            ExecutionResult indicating success or failure
+        """
+        try:
+            script_name = script_info.file_path.stem
+
+            # Check if schedule already exists
+            if self.schedule_runtime.is_scheduled(script_name):
+                return ExecutionResult(
+                    success=False,
+                    error=f"Schedule for '{script_name}' is already active"
+                )
+
+            # Create execution callback that will be called by the schedule
+            def execution_callback(name: str):
+                """Called when schedule timer fires."""
+                result = self.execute_script(script_info, arguments or {})
+                if result.success:
+                    logger.info(f"Scheduled execution of '{name}' completed successfully")
+                else:
+                    logger.warning(f"Scheduled execution of '{name}' failed: {result.error}")
+
+            # Start the schedule
+            handle = self.schedule_runtime.start_schedule(
+                script_name,
+                script_info.file_path,
+                interval_seconds,
+                execution_callback,
+                self.settings
+            )
+
+            return ExecutionResult(
+                success=True,
+                message=f"Schedule started for '{script_name}' (interval: {interval_seconds}s)",
+                data={
+                    'script_name': script_name,
+                    'interval_seconds': interval_seconds,
+                    'next_run': handle.next_run
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to start schedule: {e}")
+            return ExecutionResult(
+                success=False,
+                error=f"Failed to start schedule: {str(e)}"
+            )
+
+    def stop_scheduled_execution(self, script_name: str) -> ExecutionResult:
+        """Stop scheduled execution of a script.
+
+        Args:
+            script_name: Name of the script (file stem)
+
+        Returns:
+            ExecutionResult indicating success or failure
+        """
+        try:
+            if not self.schedule_runtime.is_scheduled(script_name):
+                return ExecutionResult(
+                    success=False,
+                    error=f"Schedule for '{script_name}' is not active"
+                )
+
+            success = self.schedule_runtime.stop_schedule(script_name)
+
+            if success:
+                return ExecutionResult(
+                    success=True,
+                    message=f"Schedule for '{script_name}' stopped"
+                )
+            else:
+                return ExecutionResult(
+                    success=False,
+                    error=f"Failed to stop schedule for '{script_name}'"
+                )
+
+        except Exception as e:
+            logger.error(f"Error stopping schedule: {e}")
+            return ExecutionResult(
+                success=False,
+                error=f"Error stopping schedule: {str(e)}"
+            )
+
+    def is_schedule_running(self, script_name: str) -> bool:
+        """Check if a script has an active schedule.
+
+        Args:
+            script_name: Name of the script (file stem)
+
+        Returns:
+            True if schedule is running, False otherwise
+        """
+        return self.schedule_runtime.is_scheduled(script_name)
+
+    def get_schedule_status(self, script_name: str) -> str:
+        """Get the status of a script's schedule.
+
+        Args:
+            script_name: Name of the script (file stem)
+
+        Returns:
+            Human-readable status string
+        """
+        return self.schedule_runtime.get_schedule_status(script_name)
+
+    def get_all_schedules(self):
+        """Get all active schedules."""
+        return self.schedule_runtime.get_all_schedules()
 
     def get_script_status(self, script_info: ScriptInfo) -> str:
         """Get current status of a script (if applicable)."""

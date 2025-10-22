@@ -56,6 +56,11 @@ class SettingsManager(QObject):
             # Service configuration will be stored as 'service_config/ScriptName/*'
             # Fields: is_service, auto_start, auto_restart, max_restarts, restart_delay_seconds
             # This is just a placeholder for the schema
+        },
+        'schedule_config': {
+            # Schedule configuration will be stored as 'schedule_config/ScriptName/*'
+            # Fields: enabled, interval_seconds, last_run, next_run
+            # This is just a placeholder for the schema
         }
     }
     
@@ -718,5 +723,94 @@ class SettingsManager(QObject):
             self.settings.remove('')
             self.settings.sync()
             logger.info(f"Removed service config for '{script_name}'")
+        finally:
+            self.settings.endGroup()
+
+    # Schedule configuration methods
+    def is_script_scheduled(self, script_name: str) -> bool:
+        """Check if a script has scheduling enabled."""
+        return self.get(f'schedule_config/{script_name}/enabled', False)
+
+    def set_schedule_enabled(self, script_name: str, enabled: bool) -> None:
+        """Enable or disable scheduling for a script."""
+        self.set(f'schedule_config/{script_name}/enabled', enabled)
+        logger.info(f"Script '{script_name}' schedule: {enabled}")
+
+    def get_schedule_config(self, script_name: str) -> Dict[str, Any]:
+        """Get complete schedule configuration for a script.
+
+        Returns:
+            Dictionary with keys: enabled, interval_seconds, last_run, next_run
+        """
+        return {
+            'enabled': self.get(f'schedule_config/{script_name}/enabled', False),
+            'interval_seconds': self.get(f'schedule_config/{script_name}/interval_seconds', 3600),
+            'last_run': self.get(f'schedule_config/{script_name}/last_run', None),
+            'next_run': self.get(f'schedule_config/{script_name}/next_run', None)
+        }
+
+    def set_schedule_config(self, script_name: str, config: Dict[str, Any]) -> None:
+        """Set schedule configuration for a script."""
+        for key, value in config.items():
+            self.set(f'schedule_config/{script_name}/{key}', value)
+        logger.info(f"Updated schedule config for '{script_name}': {config}")
+
+    def set_schedule_interval(self, script_name: str, interval_seconds: int) -> None:
+        """Set the interval for a script's schedule."""
+        self.set(f'schedule_config/{script_name}/interval_seconds', interval_seconds)
+
+    def get_schedule_interval(self, script_name: str) -> int:
+        """Get the interval (in seconds) for a script's schedule."""
+        return self.get(f'schedule_config/{script_name}/interval_seconds', 3600)
+
+    def set_schedule_last_run(self, script_name: str, timestamp: Optional[float]) -> None:
+        """Update the last run timestamp for a scheduled script."""
+        self.set(f'schedule_config/{script_name}/last_run', timestamp)
+
+    def get_schedule_last_run(self, script_name: str) -> Optional[float]:
+        """Get the last run timestamp for a scheduled script."""
+        value = self.get(f'schedule_config/{script_name}/last_run', None)
+        # Handle case where timestamp might be stored as string
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return None
+        return value
+
+    def set_schedule_next_run(self, script_name: str, timestamp: Optional[float]) -> None:
+        """Update the next run timestamp for a scheduled script."""
+        self.set(f'schedule_config/{script_name}/next_run', timestamp)
+
+    def get_schedule_next_run(self, script_name: str) -> Optional[float]:
+        """Get the next run timestamp for a scheduled script."""
+        value = self.get(f'schedule_config/{script_name}/next_run', None)
+        # Handle case where timestamp might be stored as string
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return None
+        return value
+
+    def get_all_scheduled_scripts(self) -> List[str]:
+        """Get list of all scripts that have scheduling enabled."""
+        result = []
+        self.settings.beginGroup('schedule_config')
+        try:
+            for script_name in self.settings.childGroups():
+                if self.is_script_scheduled(script_name):
+                    result.append(script_name)
+        finally:
+            self.settings.endGroup()
+        return result
+
+    def remove_schedule_config(self, script_name: str) -> None:
+        """Remove all schedule configuration for a script."""
+        self.settings.beginGroup(f'schedule_config/{script_name}')
+        try:
+            self.settings.remove('')
+            self.settings.sync()
+            logger.info(f"Removed schedule config for '{script_name}'")
         finally:
             self.settings.endGroup()
