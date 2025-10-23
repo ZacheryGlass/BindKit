@@ -479,6 +479,9 @@ class MVCApplication:
         # Create settings view
         self._settings_view = SettingsView(self.main_view)
 
+        # Store settings view reference in controller so it can update schedule tab
+        self._settings_controller._settings_view = self._settings_view
+
         # Ensure references are cleared when dialog closes
         def _cleanup_settings(_=None):
             self._settings_view = None
@@ -515,6 +518,10 @@ class MVCApplication:
         )
         # Wire Auto-Generate from Script Args tab to controller
         self._settings_view.auto_generate_presets_requested.connect(self._settings_controller.auto_generate_presets)
+        # Schedule management connections
+        self._settings_view.schedule_enabled_changed.connect(self._settings_controller.set_schedule_enabled)
+        self._settings_view.schedule_interval_changed.connect(self._settings_controller.set_schedule_interval)
+        self._settings_view.run_now_requested.connect(self._settings_controller.run_scheduled_script_now)
         self._settings_view.reset_requested.connect(self._settings_controller.reset_settings)
         # Instant-apply: no accept/save button; models persist on change
         

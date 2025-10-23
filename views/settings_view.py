@@ -57,7 +57,12 @@ class SettingsView(QDialog):
     edit_preset_requested = pyqtSignal(str, str)  # script_name, preset_name
     preset_deleted = pyqtSignal(str, str)  # script_name, preset_name
     auto_generate_presets_requested = pyqtSignal(str)  # script_name
-    
+
+    # Schedule management
+    schedule_enabled_changed = pyqtSignal(str, bool)  # script_name, enabled
+    schedule_interval_changed = pyqtSignal(str, int)  # script_name, interval_seconds
+    run_now_requested = pyqtSignal(str)  # script_name
+
     # Reset operations
     reset_requested = pyqtSignal(str)  # category
     
@@ -65,11 +70,12 @@ class SettingsView(QDialog):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        
+
         # UI components
         self.tab_widget = None
         self.script_table = None
         self.preset_table = None
+        self.schedule_view = None
         
         # Checkboxes for settings
         self.run_on_startup_checkbox = None
@@ -107,6 +113,7 @@ class SettingsView(QDialog):
         # Create tabs
         self._create_general_tab()
         self._create_scripts_tab()
+        self._create_schedule_tab()
         self._create_presets_tab()
         self._create_reset_tab()
         
@@ -336,6 +343,21 @@ class SettingsView(QDialog):
         layout.addLayout(button_layout)
         
         self.tab_widget.addTab(tab, "Presets")
+
+    def _create_schedule_tab(self):
+        """Create the Schedule configuration tab"""
+        from views.schedule_view import ScheduleView
+
+        # Create ScheduleView instance
+        self.schedule_view = ScheduleView()
+
+        # Connect ScheduleView signals to SettingsView signals (passthrough)
+        self.schedule_view.schedule_enabled_changed.connect(self.schedule_enabled_changed.emit)
+        self.schedule_view.schedule_interval_changed.connect(self.schedule_interval_changed.emit)
+        self.schedule_view.run_now_requested.connect(self.run_now_requested.emit)
+
+        # Add tab
+        self.tab_widget.addTab(self.schedule_view, "Schedule")
 
     def select_presets_tab(self):
         """Switch to the Presets tab."""
@@ -897,3 +919,33 @@ class SettingsView(QDialog):
         
         if reply == QMessageBox.StandardButton.Yes:
             self.reset_requested.emit(category)
+
+    # Schedule tab helper methods
+    def set_schedule_scripts(self, scripts: List[dict]):
+        """Set the list of available scripts for scheduling.
+
+        Args:
+            scripts: List of dicts with keys: name, display_name
+        """
+        if self.schedule_view:
+            self.schedule_view.set_available_scripts(scripts)
+
+    def update_schedule_info(self, script_name: str, schedule_info: dict):
+        """Update schedule information for a specific script.
+
+        Called by controller when schedule state changes.
+
+        Args:
+            script_name: Name of the script (display name)
+            schedule_info: Dictionary with keys: enabled, interval_seconds, last_run, next_run, status
+        """
+        if self.schedule_view:
+            self.schedule_view.update_schedule_info(script_name, schedule_info)
+
+    def select_schedule_tab(self):
+        """Select the Schedule tab programmatically"""
+        if self.schedule_view:
+            for i in range(self.tab_widget.count()):
+                if self.tab_widget.widget(i) == self.schedule_view:
+                    self.tab_widget.setCurrentIndex(i)
+                    break

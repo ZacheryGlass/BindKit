@@ -55,7 +55,7 @@ class SettingsController(QObject):
     def load_all_settings(self):
         """Load all current settings from models"""
         logger.info("Loading all settings...")
-        
+
         try:
             settings_data = {
                 'startup': self._app_model.get_startup_settings(),
@@ -65,18 +65,33 @@ class SettingsController(QObject):
                 'hotkeys': self._hotkey_model.get_all_hotkeys(),
                 'presets': self._load_all_presets()
             }
-            
+
             self._current_settings = settings_data
             self.settings_loaded.emit(settings_data)
-            
+
             # Also emit individual category updates
             self.startup_settings_updated.emit(settings_data['startup'])
             self.behavior_settings_updated.emit(settings_data['behavior'])
             self.execution_settings_updated.emit(settings_data['execution'])
             self.script_list_updated.emit(settings_data['scripts'])
-            
+
+            # Populate schedule data if settings view is available
+            try:
+                if hasattr(self, '_settings_view') and self._settings_view:
+                    # Set script list for schedule tab
+                    self._settings_view.set_schedule_scripts(settings_data['scripts'])
+
+                    # Update schedule info for each script
+                    for script in settings_data['scripts']:
+                        display_name = script['display_name']
+                        schedule_info = self.get_schedule_info_for_display(display_name)
+                        if schedule_info:
+                            self._settings_view.update_schedule_info(display_name, schedule_info)
+            except Exception as e:
+                logger.debug(f"Could not populate schedule tab (view may not be initialized yet): {e}")
+
             logger.info("Settings loaded successfully")
-            
+
         except Exception as e:
             logger.error(f"Error loading settings: {e}")
             self.error_occurred.emit("Load Error", f"Failed to load settings: {str(e)}")
@@ -84,10 +99,10 @@ class SettingsController(QObject):
     def _load_script_configurations(self) -> List[Dict[str, Any]]:
         """Load script configurations including enable/disable state"""
         configs = []
-        
+
         # Get all scripts (including disabled ones)
         all_scripts = self._script_collection.get_all_scripts()
-        
+
         for script_info in all_scripts:
             # Use the file stem as the script identifier for settings/hotkeys
             stem_name = script_info.file_path.stem
@@ -109,9 +124,9 @@ class SettingsController(QObject):
                 'arguments': script_info.arguments if script_info.arguments else [],
                 'file_path': str(script_info.file_path)
             }
-            
+
             configs.append(config)
-        
+
         return configs
     
     def _load_all_presets(self) -> Dict[str, Dict[str, Any]]:
