@@ -82,11 +82,12 @@ class SettingsController(QObject):
                     self._settings_view.set_schedule_scripts(settings_data['scripts'])
 
                     # Update schedule info for each script
+                    # Use file stem (script['name']) for schedule operations to match ScheduleView's internal identifier
                     for script in settings_data['scripts']:
-                        display_name = script['display_name']
-                        schedule_info = self.get_schedule_info_for_display(display_name)
+                        script_stem = script['name']  # File stem identifier
+                        schedule_info = self.get_schedule_info_for_display(script_stem)
                         if schedule_info:
-                            self._settings_view.update_schedule_info(display_name, schedule_info)
+                            self._settings_view.update_schedule_info(script_stem, schedule_info)
             except Exception as e:
                 logger.debug(f"Could not populate schedule tab (view may not be initialized yet): {e}")
 
@@ -634,7 +635,7 @@ class SettingsController(QObject):
         """Get schedule information formatted for UI display.
 
         Args:
-            script_name: Name of the script (display name or original name)
+            script_name: Name of the script (file stem, display name, or original name)
 
         Returns:
             Dictionary with formatted schedule info, or None if not found
