@@ -433,6 +433,7 @@ class SettingsView(QDialog):
         self._script_data = scripts
         self._refresh_script_table()
         self._update_preset_script_combo()
+        self.set_schedule_scripts(scripts)  # Update Schedule tab with new script list
 
     def update_script_hotkey(self, script_name: str, hotkey: str):
         """Update only the hotkey UI for a specific script.
