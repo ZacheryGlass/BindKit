@@ -9,7 +9,7 @@ import os
 import logging
 import argparse
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox
-from PyQt6.QtCore import Qt, QLockFile, QDir, QStandardPaths
+from PyQt6.QtCore import Qt, QLockFile, QDir, QStandardPaths, QMutex
 import signal
 import atexit
 
@@ -59,6 +59,7 @@ class SingleApplication(QApplication):
         self._running = False
         self._lock = None
         self._cleanup_registered = False
+        self.logger = logging.getLogger('SingleApp')
 
         # Prepare a per-user lock file in a writable location
         # PyQt6 nests enums: use StandardLocation; fall back for older Qt
@@ -94,8 +95,8 @@ class SingleApplication(QApplication):
             # Try to clear a stale lock left by an abnormal termination
             try:
                 self._lock.removeStaleLockFile()
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.debug(f"Could not remove stale lock file: {e}")
             # Try again after removing a stale lock
             if not self._lock.tryLock(0):
                 self._running = True
@@ -107,16 +108,16 @@ class SingleApplication(QApplication):
         # Ensure we release the lock on normal app quit
         try:
             self.aboutToQuit.connect(self._cleanup_lock)
-        except Exception:
-            pass
+        except (TypeError, RuntimeError) as e:
+            self.logger.warning(f"Could not connect cleanup signal: {e}")
 
         # Also register a process-exit handler as a best-effort cleanup
         try:
             if not self._cleanup_registered:
                 atexit.register(self._cleanup_lock)
                 self._cleanup_registered = True
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.warning(f"Could not register atexit cleanup: {e}")
 
         # Attempt to handle common termination signals for graceful cleanup
         for sig in (getattr(signal, 'SIGINT', None), getattr(signal, 'SIGTERM', None)):
@@ -138,8 +139,8 @@ class SingleApplication(QApplication):
             try:
                 if self._lock and self._lock.isLocked():
                     self._lock.unlock()
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.warning(f"Could not release lock: {e}")
             self._running = False
 
     def __del__(self):
@@ -149,8 +150,8 @@ class SingleApplication(QApplication):
         try:
             if self._lock and self._lock.isLocked():
                 self._lock.unlock()
-        except Exception:
-            pass
+        except Exception as e:
+            self.logger.debug(f"Could not unlock during cleanup: {e}")
 
     def _handle_signal(self, signum, frame):
         # Best-effort cleanup on termination signals
@@ -185,6 +186,7 @@ class MVCApplication:
         self._settings_view = None
         self._settings_controller = None
         self._settings_opening = False
+        self._settings_mutex = QMutex()  # Thread-safe access to settings dialog state
         
     def initialize(self):
         """Initialize all MVC components and set up connections"""
@@ -264,14 +266,14 @@ class MVCApplication:
             if self.tray_controller:
                 try:
                     self.tray_controller.blockSignals(True)
-                except Exception:
-                    pass
-            
+                except (TypeError, RuntimeError, AttributeError) as e:
+                    self.logger.debug(f"Could not block tray controller signals: {e}")
+
             if self.script_controller:
                 try:
                     self.script_controller.blockSignals(True)
-                except Exception:
-                    pass
+                except (TypeError, RuntimeError, AttributeError) as e:
+                    self.logger.debug(f"Could not block script controller signals: {e}")
             
             # Shutdown application
             if self.app_controller:
@@ -446,8 +448,12 @@ class MVCApplication:
         """Handle settings dialog request"""
         self.logger.info("Settings dialog requested")
 
+        # Use mutex to ensure thread-safe access to settings dialog state
+        self._settings_mutex.lock()
+
         # If already open or in process, focus existing dialog instead of opening another
         if (self._settings_view is not None and self._settings_view.isVisible()) or self._settings_opening:
+            self._settings_mutex.unlock()  # Release lock before UI operations
             try:
                 if self._settings_view is not None:
                     # Restore if minimized and bring to front
@@ -458,16 +464,17 @@ class MVCApplication:
                     # Ensure Presets tab is focused when reopening via tray
                     try:
                         self._settings_view.select_presets_tab()
-                    except Exception:
-                        pass
+                    except (AttributeError, RuntimeError) as e:
+                        self.logger.debug(f"Could not select presets tab: {e}")
                     self._settings_view.raise_()
                     self._settings_view.activateWindow()
-            except Exception:
-                pass
+            except (RuntimeError, AttributeError) as e:
+                self.logger.warning(f"Could not focus existing settings dialog: {e}")
             return
 
         # Mark as opening to prevent rapid re-entry creating duplicates
         self._settings_opening = True
+        self._settings_mutex.unlock()  # Release lock after setting flag
 
         # Create settings controller
         self._settings_controller = SettingsController(
@@ -509,13 +516,13 @@ class MVCApplication:
         self._settings_view.add_preset_requested.connect(lambda s: self._handle_preset_editor(s, self._settings_controller))
         self._settings_view.edit_preset_requested.connect(lambda s, p: self._handle_preset_editor(s, self._settings_controller, p))
         # Delete preset from Script Args tab
-        self._settings_view.preset_deleted.connect(
-            lambda display_name, preset: self._settings_controller.delete_script_preset(
-                (self.script_controller._script_collection.get_script_by_name(display_name).file_path.stem
-                 if self.script_controller._script_collection.get_script_by_name(display_name) else display_name),
-                preset
-            )
-        )
+        def _handle_preset_deletion(display_name, preset):
+            # Cache script lookup to avoid calling get_script_by_name twice
+            script = self.script_controller._script_collection.get_script_by_name(display_name)
+            script_key = script.file_path.stem if script else display_name
+            self._settings_controller.delete_script_preset(script_key, preset)
+
+        self._settings_view.preset_deleted.connect(_handle_preset_deletion)
         # Wire Auto-Generate from Script Args tab to controller
         self._settings_view.auto_generate_presets_requested.connect(self._settings_controller.auto_generate_presets)
         # Schedule management connections
@@ -543,8 +550,8 @@ class MVCApplication:
         # When presets change, refresh tray menu so preset submenus reflect changes
         try:
             self._settings_controller.preset_updated.connect(lambda *_: self.tray_controller.update_menu())
-        except Exception:
-            pass
+        except (TypeError, RuntimeError, AttributeError) as e:
+            self.logger.warning(f"Could not connect preset_updated signal to tray menu update: {e}")
         # Removed unnecessary confirmation popups for settings_saved and settings_reset
         # Only keep error messages which are important
         self._settings_controller.error_occurred.connect(self._settings_view.show_error)
@@ -552,17 +559,17 @@ class MVCApplication:
         # Also refresh the tray menu when script list metadata changes (e.g., custom names)
         try:
             self._settings_controller.script_list_updated.connect(lambda *_: self.tray_controller.update_menu())
-        except Exception:
-            pass
-        
+        except (TypeError, RuntimeError, AttributeError) as e:
+            self.logger.warning(f"Could not connect script_list_updated signal to tray menu update: {e}")
+
         # Load current settings
         self._settings_controller.load_all_settings()
 
         # Open with the Presets tab focused for quicker configuration
         try:
             self._settings_view.select_presets_tab()
-        except Exception:
-            pass
+        except (AttributeError, RuntimeError) as e:
+            self.logger.debug(f"Could not select presets tab: {e}")
         
         # Show dialog
         try:
@@ -687,26 +694,26 @@ class MVCApplication:
                     self.tray_controller.notification_display_requested.disconnect()
                     self.tray_controller.settings_dialog_requested.disconnect()
                     self.tray_controller.application_exit_requested.disconnect()
-                except Exception:
-                    pass  # Signal might already be disconnected
-            
+                except (TypeError, RuntimeError, AttributeError) as e:
+                    self.logger.debug(f"Tray controller signals already disconnected or not connected: {e}")
+
             # Disconnect tray view signals
             if self.tray_view:
                 try:
                     self.tray_view.menu_action_triggered.disconnect()
                     self.tray_view.title_clicked.disconnect()
                     self.tray_view.exit_requested.disconnect()
-                except Exception:
-                    pass
-            
+                except (TypeError, RuntimeError, AttributeError) as e:
+                    self.logger.debug(f"Tray view signals already disconnected or not connected: {e}")
+
             # Disconnect hotkey manager signals
             if self.hotkey_manager:
                 try:
                     self.hotkey_manager.hotkey_triggered.disconnect()
                     self.hotkey_manager.registration_failed.disconnect()
-                except Exception:
-                    pass
-            
+                except (TypeError, RuntimeError, AttributeError) as e:
+                    self.logger.debug(f"Hotkey manager signals already disconnected or not connected: {e}")
+
             # Disconnect model signals from controllers
             if self.app_controller:
                 try:
@@ -717,19 +724,19 @@ class MVCApplication:
                         tray_model.tooltip_changed.disconnect()
                         tray_model.menu_update_requested.disconnect()
                         tray_model.notification_requested.disconnect()
-                    
+
                     script_execution = self.app_controller.get_script_execution_model()
                     if script_execution:
                         script_execution.script_execution_started.disconnect()
                         script_execution.script_execution_completed.disconnect()
                         script_execution.script_execution_failed.disconnect()
-                    
+
                     hotkey_model = self.app_controller.get_hotkey_model()
                     if hotkey_model:
                         hotkey_model.hotkeys_changed.disconnect()
-                        
-                except Exception:
-                    pass
+
+                except (TypeError, RuntimeError, AttributeError) as e:
+                    self.logger.debug(f"Model signals already disconnected or not connected: {e}")
                     
             self.logger.debug("Signal disconnection completed")
             

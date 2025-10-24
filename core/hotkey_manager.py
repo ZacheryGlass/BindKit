@@ -166,8 +166,8 @@ class HotkeyManager(QObject):
                         try:
                             self.widget.hide()
                             self.widget.deleteLater()
-                        except Exception:
-                            pass
+                        except (RuntimeError, AttributeError) as e:
+                            logger.debug(f"Could not clean up partially created widget: {e}")
                     self.widget = None
                     return False
                 
@@ -182,8 +182,8 @@ class HotkeyManager(QObject):
                     try:
                         self.widget.hide()
                         self.widget.deleteLater()
-                    except Exception:
-                        pass
+                    except (RuntimeError, AttributeError) as e:
+                        logger.debug(f"Could not clean up widget after error: {e}")
                 self.widget = None
                 return False
         else:
@@ -205,10 +205,17 @@ class HotkeyManager(QObject):
             try:
                 # Disconnect signal to prevent issues during cleanup
                 self.widget.hotkey_triggered.disconnect()
-            except Exception:
-                pass
-            
-            self.widget.hide()
+            except (TypeError, RuntimeError) as e:
+                logger.debug(f"Hotkey widget signal already disconnected or not connected: {e}")
+
+            # Explicitly destroy the native window to free Windows resources
+            try:
+                self.widget.hide()
+                self.widget.close()  # Close the window
+                self.widget.destroy()  # Destroy the native window handle
+            except (RuntimeError, AttributeError) as e:
+                logger.debug(f"Error destroying widget window: {e}")
+
             self.widget.deleteLater()
             self.widget = None
         
@@ -297,9 +304,32 @@ class HotkeyManager(QObject):
         for reserved in RESERVED_HOTKEYS:
             if set(reserved) == normalized_parts:
                 return True
-        
+
         return False
-    
+
+    def _validate_widget_handle(self) -> bool:
+        """
+        Validate that the widget window handle is still valid.
+
+        Returns:
+            True if handle is valid, False otherwise
+        """
+        if not self.widget or not hasattr(self.widget, 'hwnd') or not self.widget.hwnd:
+            logger.warning("Widget or window handle is not initialized")
+            return False
+
+        try:
+            # Verify the widget's winId is still valid
+            win_id = self.widget.winId()
+            if win_id == 0 or int(win_id) != self.widget.hwnd:
+                logger.error(f"Widget window handle has become invalid (was {self.widget.hwnd}, now {win_id})")
+                return False
+
+            return True
+        except (RuntimeError, AttributeError) as e:
+            logger.error(f"Error validating widget handle: {e}")
+            return False
+
     def normalize_hotkey_string(self, hotkey_string: str) -> str:
         """Normalize a hotkey string for consistent comparison"""
         parts = []
@@ -353,8 +383,8 @@ class HotkeyManager(QObject):
             self.registration_failed.emit(script_name, hotkey_string, error_msg)
             return False
         
-        # Make sure widget is created and has a valid handle
-        if not self.widget or not self.widget.hwnd:
+        # Validate widget and window handle are still valid
+        if not self._validate_widget_handle():
             error_msg = "Hotkey system not started or widget handle invalid"
             logger.error(error_msg)
             self.registration_failed.emit(script_name, normalized, error_msg)
@@ -365,12 +395,13 @@ class HotkeyManager(QObject):
         
         # Attempt to register with Windows using the widget's HWND
         try:
+            # RegisterHotKey returns 0 on failure, non-zero on success (Windows API convention)
             result = win32gui.RegisterHotKey(
                 self.widget.hwnd, hotkey_id, modifiers, vk_code
             )
-            
+
             if result == 0:
-                # Registration failed
+                # Registration failed - retrieve error code for diagnostics
                 import win32api
                 error_code = win32api.GetLastError()
                 if error_code == 1409:  # ERROR_HOTKEY_ALREADY_REGISTERED
@@ -380,6 +411,9 @@ class HotkeyManager(QObject):
                 logger.error(error_msg)
                 self.registration_failed.emit(script_name, normalized, error_msg)
                 return False
+
+            # Validate that we got a valid success code
+            logger.debug(f"RegisterHotKey returned {result} for hotkey {normalized}")
             
             # Registration successful
             self.hotkeys[hotkey_id] = (script_name, normalized)
@@ -442,8 +476,14 @@ class HotkeyManager(QObject):
         logger.info("All hotkeys unregistered")
     
     def get_registered_hotkeys(self) -> Dict[str, str]:
-        """Get all registered hotkeys as script_name -> hotkey_string mapping"""
-        return {script_name: hotkey_string 
+        """
+        Get all registered hotkeys as script_name -> hotkey_string mapping.
+
+        Note: self.hotkeys is structured as {hotkey_id: (script_name, hotkey_string)},
+        so .values() gives us tuples of (script_name, hotkey_string) which we unpack
+        in the dict comprehension to create the desired {script_name: hotkey_string} mapping.
+        """
+        return {script_name: hotkey_string
                 for script_name, hotkey_string in self.hotkeys.values()}
     
     def _on_hotkey_triggered(self, hotkey_id: int):
