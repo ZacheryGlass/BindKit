@@ -118,7 +118,10 @@ class ScheduleRuntime(QObject):
         self._active_schedules[script_name] = handle
 
         # Connect timer timeout to execution handler
-        timer.timeout.connect(lambda: self._execute_scheduled_task(script_name, settings_manager))
+        # Use default argument to capture current values and avoid closure issues
+        timer.timeout.connect(
+            lambda name=script_name, mgr=settings_manager: self._execute_scheduled_task(name, mgr)
+        )
 
         # Start timer
         timer.start(interval_seconds * 1000)  # QTimer uses milliseconds
@@ -149,7 +152,10 @@ class ScheduleRuntime(QObject):
 
         # Stop timer
         handle.timer.stop()
-        handle.timer.timeout.disconnect()
+        try:
+            handle.timer.timeout.disconnect()
+        except (TypeError, RuntimeError) as e:
+            logger.debug(f"Timer signal already disconnected or not connected: {e}")
 
         # Remove from active schedules
         del self._active_schedules[script_name]

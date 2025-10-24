@@ -7,8 +7,13 @@ Toggles between available audio output devices on Windows using pycaw.
 
 import sys
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 try:
     from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
@@ -39,8 +44,10 @@ def _load_saved_state() -> Dict[str, Any]:
                     'devices': data.get('devices', []),
                     'current_index': data.get('current_index', 0)
                 }
-    except Exception:
-        pass
+    except (OSError, IOError, json.JSONDecodeError) as e:
+        logger.warning(f"Failed to load saved audio device state: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error loading audio device state: {e}", exc_info=True)
     return {'devices': [], 'current_index': 0}
 
 
@@ -53,25 +60,27 @@ def _save_state(devices: List[Dict[str, str]], current_index: int) -> None:
                 'devices': devices,
                 'current_index': current_index
             }, f, indent=2)
-    except Exception:
-        pass
+    except (OSError, IOError) as e:
+        logger.warning(f"Failed to save audio device state: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error saving audio device state: {e}", exc_info=True)
 
 
 def _get_audio_devices() -> List[Dict[str, str]]:
     """Get list of available audio output devices using pycaw."""
     if not AudioUtilities:
         return []
-    
+
     try:
         devices = []
         # Get all audio endpoints
         all_devices = AudioUtilities.GetAllDevices()
-        
+
         for device in all_devices:
             try:
                 device_name = device.FriendlyName
                 device_id = device.id
-                
+
                 # Filter to only include the main output devices we care about
                 # Skip VoiceMeeter virtual devices and other virtual audio cables
                 # Focus on the two devices we know work: Intel Display Audio and Razer Kraken
@@ -86,14 +95,22 @@ def _get_audio_devices() -> List[Dict[str, str]]:
                             'name': device_name,
                             'id': device_id
                         })
-            except Exception:
+            except AttributeError as e:
+                logger.debug(f"Skipping device with missing attributes: {e}")
                 continue
-        
+            except Exception as e:
+                logger.warning(f"Error processing audio device: {e}")
+                continue
+
         # Sort devices for consistent ordering
         devices.sort(key=lambda x: x['name'])
         return devices
-        
-    except Exception:
+
+    except ImportError as e:
+        logger.error(f"COM library import error: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Error getting audio devices: {e}", exc_info=True)
         return []
 
 
@@ -162,13 +179,20 @@ def _set_default_audio_device(device_id: str) -> bool:
                 timeout=10,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
             )
-            
+
             return result.returncode == 0 and 'success' in result.stdout.lower()
-            
+
         finally:
             ole32.CoUninitialize()
-            
-    except Exception:
+
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"PowerShell command timed out while setting default audio device: {e}")
+        return False
+    except (OSError, subprocess.SubprocessError) as e:
+        logger.error(f"Failed to execute PowerShell command: {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Error setting default audio device: {e}", exc_info=True)
         # Fallback: return True for demonstration purposes
         # In a production environment, you might want to install AudioDeviceCmdlets
         # or use a more robust solution
@@ -179,7 +203,7 @@ def get_current_status() -> str:
     """Return the current audio device name."""
     if not AudioUtilities:
         return 'No pycaw'
-    
+
     try:
         # Get the current default device
         default_device = AudioUtilities.GetSpeakers()
@@ -189,14 +213,16 @@ def get_current_status() -> str:
             if len(device_name) > 25:
                 return device_name[:22] + '...'
             return device_name
-    except Exception:
-        pass
-    
+    except AttributeError as e:
+        logger.debug(f"Could not get default audio device name: {e}")
+    except Exception as e:
+        logger.warning(f"Error getting current audio device: {e}")
+
     # Fall back to saved state
     state = _load_saved_state()
     devices = state['devices']
     current_index = state['current_index']
-    
+
     if devices and current_index < len(devices):
         device_name = devices[current_index]['name']
         if len(device_name) > 25:
@@ -289,16 +315,17 @@ def validate_system() -> bool:
     """Check if audio toggling is available on this system."""
     if sys.platform != 'win32':
         return False
-    
+
     if not AudioUtilities:
         return False
-    
+
     try:
         # Check if we can get audio devices
         devices = _get_audio_devices()
         # Script is valid if we have at least 2 audio devices to toggle between
         return len(devices) >= 2
-    except:
+    except Exception as e:
+        logger.error(f"Error validating audio system: {e}", exc_info=True)
         return False
 
 

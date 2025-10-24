@@ -232,23 +232,25 @@ class TrayView(QObject):
                 try:
                     # Disconnect all signals
                     action.triggered.disconnect()
-                except:
-                    pass  # Might already be disconnected
-                
+                except (TypeError, RuntimeError) as e:
+                    # TypeError: signal not connected or already disconnected
+                    # RuntimeError: C++ object already deleted
+                    logger.debug(f"Signal already disconnected or object deleted: {e}")
+
                 # Schedule for deletion
                 action.deleteLater()
-            
+
             # Delete all submenus
             for submenu in self._submenus:
                 submenu.clear()
                 submenu.deleteLater()
-            
+
             # Clear tracking lists
             self._menu_actions.clear()
             self._submenus.clear()
-            
+
             logger.debug("Menu objects cleaned up")
-            
+
         except Exception as e:
             logger.error(f"Error during menu cleanup: {e}")
     
