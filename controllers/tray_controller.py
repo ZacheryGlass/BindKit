@@ -327,7 +327,6 @@ class TrayController(QObject):
         logger.debug("Setting up tray controller model connections...")
         self._tray_model.menu_update_requested.connect(self.update_menu)
         self._tray_model.notification_requested.connect(self.notification_display_requested.emit)
-        self._notification_model.notification_shown.connect(self.notification_display_requested.emit)
         self._script_controller.script_list_updated.connect(lambda scripts: self.update_menu())
         
         # Connect script execution signals to update menu for running state
