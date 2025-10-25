@@ -531,6 +531,8 @@ class MVCApplication:
         self._settings_view.schedule_enabled_changed.connect(self._settings_controller.set_schedule_enabled)
         self._settings_view.schedule_interval_changed.connect(self._settings_controller.set_schedule_interval)
         self._settings_view.run_now_requested.connect(self._settings_controller.run_scheduled_script_now)
+        # Connect schedule view's info request to controller
+        self._settings_view.schedule_view.schedule_info_requested.connect(self._settings_controller.on_schedule_info_requested)
         self._settings_view.reset_requested.connect(self._settings_controller.reset_settings)
         # Instant-apply: no accept/save button; models persist on change
         
@@ -563,6 +565,18 @@ class MVCApplication:
             self._settings_controller.script_list_updated.connect(lambda *_: self.tray_controller.update_menu())
         except (TypeError, RuntimeError, AttributeError) as e:
             self.logger.warning(f"Could not connect script_list_updated signal to tray menu update: {e}")
+
+        # Connect schedule runtime signals to update UI in real-time
+        try:
+            schedule_runtime = self._script_execution._script_loader.executor.schedule_runtime
+            if schedule_runtime:
+                schedule_runtime.schedule_executed.connect(self._settings_controller.on_schedule_executed)
+                schedule_runtime.schedule_started.connect(self._settings_controller.on_schedule_started)
+                schedule_runtime.schedule_stopped.connect(self._settings_controller.on_schedule_stopped)
+                self._settings_controller._schedule_runtime = schedule_runtime
+                self.logger.info("Connected schedule runtime signals to settings controller")
+        except (AttributeError, TypeError, RuntimeError) as e:
+            self.logger.warning(f"Could not connect schedule runtime signals: {e}")
 
         # Load current settings
         self._settings_controller.load_all_settings()
