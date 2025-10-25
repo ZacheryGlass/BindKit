@@ -101,6 +101,8 @@ class SettingsView(QDialog):
         """Initialize the user interface"""
         self.setWindowTitle("Settings")
         self.setModal(True)
+        # Ensure dialog is destroyed when closed to avoid accumulating hidden instances
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self.setMinimumSize(1100, 650)
         self.resize(1200, 700)  # Set a comfortable default size
         
