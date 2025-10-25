@@ -1,4 +1,5 @@
 import logging
+import threading
 from typing import Dict, List, Optional, Tuple
 from PyQt6.QtCore import QObject, pyqtSignal
 from core.settings import SettingsManager
@@ -21,6 +22,7 @@ class HotkeyRegistry(QObject):
         self.settings = settings_manager or SettingsManager()
         self._mappings: Dict[str, str] = {}  # script_name -> hotkey_string
         self._reverse_mappings: Dict[str, str] = {}  # hotkey_string -> script_name
+        self._lock = threading.RLock()
         
         # Load existing mappings from settings
         self._load_mappings()
@@ -29,21 +31,22 @@ class HotkeyRegistry(QObject):
     
     def _load_mappings(self):
         """Load hotkey mappings from settings"""
-        self._mappings.clear()
-        self._reverse_mappings.clear()
-        
-        # Get all hotkey settings
-        settings = self.settings.settings
-        settings.beginGroup("hotkeys")
-        
-        for script_name in settings.childKeys():
-            hotkey_string = settings.value(script_name)
-            if hotkey_string:
-                self._mappings[script_name] = hotkey_string
-                self._reverse_mappings[hotkey_string] = script_name
-                logger.debug(f"Loaded hotkey mapping: {script_name} -> {hotkey_string}")
-        
-        settings.endGroup()
+        with self._lock:
+            self._mappings.clear()
+            self._reverse_mappings.clear()
+            
+            # Get all hotkey settings
+            settings = self.settings.settings
+            settings.beginGroup("hotkeys")
+            
+            for script_name in settings.childKeys():
+                hotkey_string = settings.value(script_name)
+                if hotkey_string:
+                    self._mappings[script_name] = hotkey_string
+                    self._reverse_mappings[hotkey_string] = script_name
+                    logger.debug(f"Loaded hotkey mapping: {script_name} -> {hotkey_string}")
+            
+            settings.endGroup()
     
     def _save_mapping(self, script_name: str, hotkey_string: Optional[str]):
         """Save a single hotkey mapping to settings"""
@@ -67,34 +70,35 @@ class HotkeyRegistry(QObject):
             return False, "Script name and hotkey cannot be empty"
         
         # Normalize the hotkey string
-        hotkey_string = hotkey_string.strip()
+        normalized_hotkey = hotkey_string.strip()
         
-        # Check if hotkey is already assigned to another script
-        existing_script = self._reverse_mappings.get(hotkey_string)
-        if existing_script and existing_script != script_name:
-            return False, f"Hotkey {hotkey_string} is already assigned to {existing_script}"
+        with self._lock:
+            # Check if hotkey is already assigned to another script
+            existing_script = self._reverse_mappings.get(normalized_hotkey)
+            if existing_script and existing_script != script_name:
+                return False, f"Hotkey {normalized_hotkey} is already assigned to {existing_script}"
+            
+            # Check if script already has a different hotkey
+            old_hotkey = self._mappings.get(script_name)
+            
+            # Update mappings
+            self._mappings[script_name] = normalized_hotkey
+            self._reverse_mappings[normalized_hotkey] = script_name
+            
+            # Remove old reverse mapping if it exists
+            if old_hotkey and old_hotkey != normalized_hotkey:
+                self._reverse_mappings.pop(old_hotkey, None)
+            
+            # Save to settings while still holding the lock to prevent interleaving writes
+            self._save_mapping(script_name, normalized_hotkey)
         
-        # Check if script already has a different hotkey
-        old_hotkey = self._mappings.get(script_name)
-        
-        # Update mappings
-        self._mappings[script_name] = hotkey_string
-        self._reverse_mappings[hotkey_string] = script_name
-        
-        # Remove old reverse mapping if it exists
-        if old_hotkey and old_hotkey != hotkey_string:
-            self._reverse_mappings.pop(old_hotkey, None)
-        
-        # Save to settings
-        self._save_mapping(script_name, hotkey_string)
-        
-        # Emit appropriate signal
-        if old_hotkey and old_hotkey != hotkey_string:
-            logger.info(f"Updated hotkey for {script_name}: {old_hotkey} -> {hotkey_string}")
-            self.hotkey_updated.emit(script_name, old_hotkey, hotkey_string)
+        # Emit appropriate signal outside the lock to avoid deadlocks
+        if old_hotkey and old_hotkey != normalized_hotkey:
+            logger.info(f"Updated hotkey for {script_name}: {old_hotkey} -> {normalized_hotkey}")
+            self.hotkey_updated.emit(script_name, old_hotkey, normalized_hotkey)
         else:
-            logger.info(f"Added hotkey for {script_name}: {hotkey_string}")
-            self.hotkey_added.emit(script_name, hotkey_string)
+            logger.info(f"Added hotkey for {script_name}: {normalized_hotkey}")
+            self.hotkey_added.emit(script_name, normalized_hotkey)
         
         return True, ""
     
@@ -104,18 +108,19 @@ class HotkeyRegistry(QObject):
         
         Returns: True if a hotkey was removed, False if no hotkey existed
         """
-        if script_name not in self._mappings:
-            logger.debug(f"No hotkey mapping found for {script_name}")
-            return False
-        
-        hotkey_string = self._mappings[script_name]
-        
-        # Remove from mappings
-        del self._mappings[script_name]
-        self._reverse_mappings.pop(hotkey_string, None)
-        
-        # Remove from settings
-        self._save_mapping(script_name, None)
+        with self._lock:
+            if script_name not in self._mappings:
+                logger.debug(f"No hotkey mapping found for {script_name}")
+                return False
+            
+            hotkey_string = self._mappings[script_name]
+            
+            # Remove from mappings
+            del self._mappings[script_name]
+            self._reverse_mappings.pop(hotkey_string, None)
+            
+            # Remove from settings
+            self._save_mapping(script_name, None)
         
         logger.info(f"Removed hotkey for {script_name}: {hotkey_string}")
         self.hotkey_removed.emit(script_name)
@@ -124,31 +129,41 @@ class HotkeyRegistry(QObject):
     
     def get_hotkey(self, script_name: str) -> Optional[str]:
         """Get the hotkey string for a script"""
-        return self._mappings.get(script_name)
+        with self._lock:
+            return self._mappings.get(script_name)
+    
+    def get_hotkey_for_script(self, script_name: str) -> Optional[str]:
+        """Backwards-compatible alias for get_hotkey."""
+        return self.get_hotkey(script_name)
     
     def get_script_for_hotkey(self, hotkey_string: str) -> Optional[str]:
         """Get the script name for a hotkey string"""
-        return self._reverse_mappings.get(hotkey_string)
+        with self._lock:
+            return self._reverse_mappings.get(hotkey_string)
     
     def get_all_mappings(self) -> Dict[str, str]:
         """Get all hotkey mappings as a dictionary"""
-        return self._mappings.copy()
+        with self._lock:
+            return self._mappings.copy()
     
     def get_scripts_with_hotkeys(self) -> List[str]:
         """Get a list of all scripts that have hotkeys assigned"""
-        return list(self._mappings.keys())
+        with self._lock:
+            return list(self._mappings.keys())
     
     def has_hotkey(self, script_name: str) -> bool:
         """Check if a script has a hotkey assigned"""
-        return script_name in self._mappings
+        with self._lock:
+            return script_name in self._mappings
     
     def is_hotkey_assigned(self, hotkey_string: str) -> bool:
         """Check if a hotkey string is already assigned to any script"""
-        return hotkey_string in self._reverse_mappings
+        with self._lock:
+            return hotkey_string in self._reverse_mappings
     
     def clear_all(self):
         """Remove all hotkey mappings"""
-        scripts = list(self._mappings.keys())
+        scripts = self.get_scripts_with_hotkeys()
         for script_name in scripts:
             self.remove_hotkey(script_name)
         
@@ -172,8 +187,12 @@ class HotkeyRegistry(QObject):
             except Exception as e:
                 logger.error(f"Error getting script metadata: {e}")
         
+        # Snapshot current mappings to avoid locking while discovering scripts
+        with self._lock:
+            current_mappings = list(self._mappings.keys())
+
         # Check each mapping
-        for script_name in list(self._mappings.keys()):
+        for script_name in current_mappings:
             if script_name not in available_scripts:
                 logger.warning(f"Removing orphaned hotkey for non-existent script: {script_name}")
                 self.remove_hotkey(script_name)
@@ -226,7 +245,8 @@ class HotkeyRegistry(QObject):
         
         Returns: Name of conflicting script or None
         """
-        existing_script = self._reverse_mappings.get(hotkey_string)
+        with self._lock:
+            existing_script = self._reverse_mappings.get(hotkey_string)
         
         if existing_script and existing_script != exclude_script:
             return existing_script

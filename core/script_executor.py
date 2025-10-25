@@ -6,6 +6,7 @@ import logging
 import time
 import weakref
 import gc
+import os
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
@@ -99,7 +100,12 @@ class ScriptExecutor:
                 )
         
         logger.debug(f"Executing command: {' '.join(cmd)}")
-        
+
+        # Force UTF-8 I/O so scripts with non-ASCII output don't crash on Windows consoles
+        env = os.environ.copy()
+        env['PYTHONIOENCODING'] = 'utf-8'
+        env.setdefault('PYTHONUTF8', '1')
+
         process = None
         try:
             used_timeout = self.settings.get_script_timeout_seconds() if self.settings else 30
@@ -110,6 +116,9 @@ class ScriptExecutor:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding='utf-8',
+                errors='replace',
+                env=env,
                 creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
             )
             
@@ -533,9 +542,11 @@ class ScriptExecutor:
         """
         try:
             if not self.schedule_runtime.is_scheduled(script_name):
+                logger.info(f"Schedule for '{script_name}' already stopped")
                 return ExecutionResult(
-                    success=False,
-                    error=f"Schedule for '{script_name}' is not active"
+                    success=True,
+                    message=f"Schedule for '{script_name}' already stopped",
+                    data={'already_stopped': True}
                 )
 
             success = self.schedule_runtime.stop_schedule(script_name)
