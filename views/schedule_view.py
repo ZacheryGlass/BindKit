@@ -269,18 +269,34 @@ class ScheduleView(QWidget):
         Update configuration panel for selected script.
 
         This is called by the controller to update the panel state.
+        Block signals to prevent signal loops during programmatic updates.
         """
-        if not script_name:
-            self.schedule_enabled_checkbox.setEnabled(False)
-            self.interval_spinbox.setEnabled(False)
-            self.interval_unit_combo.setEnabled(False)
-            self.run_now_button.setEnabled(False)
-            return
+        # Block signals to prevent cascading signal emissions
+        widgets = [
+            self.schedule_enabled_checkbox,
+            self.interval_spinbox,
+            self.interval_unit_combo,
+            self.run_now_button
+        ]
 
-        self.schedule_enabled_checkbox.setEnabled(True)
-        self.interval_spinbox.setEnabled(True)
-        self.interval_unit_combo.setEnabled(True)
-        self.run_now_button.setEnabled(True)
+        for widget in widgets:
+            widget.blockSignals(True)
+
+        try:
+            if not script_name:
+                self.schedule_enabled_checkbox.setEnabled(False)
+                self.interval_spinbox.setEnabled(False)
+                self.interval_unit_combo.setEnabled(False)
+                self.run_now_button.setEnabled(False)
+            else:
+                self.schedule_enabled_checkbox.setEnabled(True)
+                self.interval_spinbox.setEnabled(True)
+                self.interval_unit_combo.setEnabled(True)
+                self.run_now_button.setEnabled(True)
+        finally:
+            # Always unblock signals
+            for widget in widgets:
+                widget.blockSignals(False)
 
     def update_schedule_info(self, script_name: str, schedule_info: dict):
         """
