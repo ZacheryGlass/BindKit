@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, Callable
 from dataclasses import dataclass
 from enum import Enum
+from threading import Lock
 from PyQt6.QtCore import QTimer, QObject, pyqtSignal
 
 logger = logging.getLogger('Core.ScheduleRuntime')
@@ -72,6 +73,8 @@ class ScheduleRuntime(QObject):
         super().__init__()
         # Track active schedules
         self._active_schedules: Dict[str, ScheduleHandle] = {}
+        # Lock for thread-safe schedule operations
+        self._schedule_lock = Lock()
 
         logger.info("ScheduleRuntime initialized")
 
@@ -99,9 +102,6 @@ class ScheduleRuntime(QObject):
         Raises:
             RuntimeError: If schedule already exists for this script
         """
-        if script_name in self._active_schedules:
-            raise RuntimeError(f"Schedule for '{script_name}' is already active")
-
         # Validate interval bounds
         if interval_seconds < MIN_INTERVAL_SECONDS:
             raise ValueError(
@@ -133,7 +133,11 @@ class ScheduleRuntime(QObject):
             state=ScheduleState.SCHEDULED
         )
 
-        self._active_schedules[script_name] = handle
+        # Atomic check and insertion to prevent race condition
+        with self._schedule_lock:
+            if script_name in self._active_schedules:
+                raise RuntimeError(f"Schedule for '{script_name}' is already active")
+            self._active_schedules[script_name] = handle
 
         # Connect timer timeout to execution handler
         # Use default argument to capture current values and avoid closure issues
