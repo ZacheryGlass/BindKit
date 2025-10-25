@@ -264,11 +264,13 @@ class ScriptExecutionModel(QObject):
     
     def execute_script(self, script_name: str, arguments: Optional[Dict[str, Any]] = None, async_execution: bool = True) -> bool:
         """Execute a script with optional arguments
-        
+
         Args:
             script_name: Name of the script to execute
             arguments: Optional arguments for the script
             async_execution: If True, execute in background thread. If False, execute synchronously.
+                            Note: FUNCTION_CALL and MODULE_EXEC strategies always execute synchronously
+                            on the main thread to allow creation of PyQt6 objects.
         """
         try:
             # Check if script is already running (thread-safe)
@@ -277,21 +279,30 @@ class ScriptExecutionModel(QObject):
                     logger.warning(f"Script {script_name} is already running")
                     self.script_execution_failed.emit(script_name, "Script is already running")
                     return False
-            
+
             script_info = self._script_collection.get_script_by_name(script_name)
             if not script_info:
                 self.script_execution_failed.emit(script_name, f"Script not found: {script_name}")
                 return False
-            
+
+            # Import ExecutionStrategy here to avoid circular imports
+            from core.script_analyzer import ExecutionStrategy
+
+            # Force synchronous execution for FUNCTION_CALL and MODULE_EXEC strategies
+            # These strategies execute script functions directly and may create PyQt6 objects,
+            # which must happen on the main thread
+            if script_info.execution_strategy in (ExecutionStrategy.FUNCTION_CALL, ExecutionStrategy.MODULE_EXEC):
+                async_execution = False
+
             logger.info(f"Executing script: {script_name} (async={async_execution})")
             self.script_execution_started.emit(script_name)
-            
+
             # Determine script key for execution
             if self._script_collection.is_external_script(script_name):
                 script_key = script_name  # Use display name for external scripts
             else:
                 script_key = script_info.file_path.stem  # Use file stem for default scripts
-            
+
             if async_execution:
                 # Create and start worker thread
                 worker = ScriptExecutionWorker(self._script_loader, script_key, arguments or {})
