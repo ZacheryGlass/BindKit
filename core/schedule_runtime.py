@@ -140,11 +140,21 @@ class ScheduleRuntime(QObject):
             lambda name=script_name, mgr=settings_manager: self._execute_scheduled_task(name, mgr)
         )
 
-        # Start timer
-        timer.start(interval_seconds * 1000)  # QTimer uses milliseconds
-
-        logger.info(f"Schedule for '{script_name}' started (next run in {interval_seconds}s)")
-        self.schedule_started.emit(script_name)
+        # Start timer and emit signal with cleanup on failure
+        try:
+            timer.start(interval_seconds * 1000)  # QTimer uses milliseconds
+            logger.info(f"Schedule for '{script_name}' started (next run in {interval_seconds}s)")
+            self.schedule_started.emit(script_name)
+        except Exception as e:
+            # Clean up on failure: remove handle and disconnect signals
+            logger.error(f"Failed to start schedule for '{script_name}': {e}")
+            timer.stop()
+            try:
+                timer.timeout.disconnect()
+            except (TypeError, RuntimeError):
+                pass  # Signal was not connected
+            del self._active_schedules[script_name]
+            raise
 
         return handle
 
