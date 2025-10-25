@@ -35,7 +35,8 @@ class ScriptExecutor:
         self.settings = settings
         self.max_cache_size = max_cache_size  # Maximum number of cached modules (reduced from 50 to 20)
         self.cache_ttl_seconds = cache_ttl_seconds  # Time-to-live in seconds (reduced from 1 hour to 30 minutes)
-        self._last_cleanup_time = time.time()
+        # Track when cache cleanup last ran (0 enables immediate cleanup on first call)
+        self._last_cleanup_time = 0
 
         # Initialize service runtime for long-running scripts
         self.service_runtime = ServiceRuntime()
@@ -658,9 +659,10 @@ class ScriptExecutor:
     def _cleanup_stale_modules(self):
         """Remove modules that haven't been accessed recently."""
         current_time = time.time()
-        
-        # Only cleanup periodically (every 5 minutes)
-        if current_time - self._last_cleanup_time < 300:
+
+        # Run cleanup no more often than the smaller of 5 minutes or the configured TTL
+        min_interval = min(300, max(1, self.cache_ttl_seconds))
+        if current_time - self._last_cleanup_time < min_interval:
             return
         
         self._last_cleanup_time = current_time
