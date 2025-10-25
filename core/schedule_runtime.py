@@ -23,6 +23,7 @@ logger = logging.getLogger('Core.ScheduleRuntime')
 # QTimer uses 32-bit signed integer for milliseconds
 # Maximum safe value: 2^31-1 = 2,147,483,647 ms ≈ 24.8 days
 MAX_TIMER_INTERVAL_SECONDS = 2147483  # ~24.8 days
+MIN_INTERVAL_SECONDS = 10  # Minimum interval to prevent excessive executions
 
 
 class ScheduleState(Enum):
@@ -100,7 +101,12 @@ class ScheduleRuntime(QObject):
         if script_name in self._active_schedules:
             raise RuntimeError(f"Schedule for '{script_name}' is already active")
 
-        # Validate interval to prevent timer overflow
+        # Validate interval bounds
+        if interval_seconds < MIN_INTERVAL_SECONDS:
+            raise ValueError(
+                f"Interval must be at least {MIN_INTERVAL_SECONDS} seconds, got {interval_seconds}s"
+            )
+
         if interval_seconds > MAX_TIMER_INTERVAL_SECONDS:
             raise ValueError(
                 f"Interval {interval_seconds}s exceeds maximum of {MAX_TIMER_INTERVAL_SECONDS}s (~24.8 days)"
@@ -211,7 +217,12 @@ class ScheduleRuntime(QObject):
             logger.warning(f"Schedule for '{script_name}' not found")
             return False
 
-        # Validate interval to prevent timer overflow
+        # Validate interval bounds
+        if new_interval_seconds < MIN_INTERVAL_SECONDS:
+            raise ValueError(
+                f"Interval must be at least {MIN_INTERVAL_SECONDS} seconds, got {new_interval_seconds}s"
+            )
+
         if new_interval_seconds > MAX_TIMER_INTERVAL_SECONDS:
             raise ValueError(
                 f"Interval {new_interval_seconds}s exceeds maximum of {MAX_TIMER_INTERVAL_SECONDS}s (~24.8 days)"
