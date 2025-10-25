@@ -453,21 +453,23 @@ class MVCApplication:
 
         # If already open or in process, focus existing dialog instead of opening another
         if (self._settings_view is not None and self._settings_view.isVisible()) or self._settings_opening:
+            # Capture reference before releasing mutex to prevent race condition
+            view_ref = self._settings_view
             self._settings_mutex.unlock()  # Release lock before UI operations
             try:
-                if self._settings_view is not None:
+                if view_ref is not None:
                     # Restore if minimized and bring to front
-                    self._settings_view.setWindowState(
-                        self._settings_view.windowState() & ~Qt.WindowState.WindowMinimized
+                    view_ref.setWindowState(
+                        view_ref.windowState() & ~Qt.WindowState.WindowMinimized
                     )
-                    self._settings_view.show()
+                    view_ref.show()
                     # Ensure Presets tab is focused when reopening via tray
                     try:
-                        self._settings_view.select_presets_tab()
+                        view_ref.select_presets_tab()
                     except (AttributeError, RuntimeError) as e:
                         self.logger.debug(f"Could not select presets tab: {e}")
-                    self._settings_view.raise_()
-                    self._settings_view.activateWindow()
+                    view_ref.raise_()
+                    view_ref.activateWindow()
             except (RuntimeError, AttributeError) as e:
                 self.logger.warning(f"Could not focus existing settings dialog: {e}")
             return
