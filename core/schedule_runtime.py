@@ -19,6 +19,11 @@ from PyQt6.QtCore import QTimer, QObject, pyqtSignal
 
 logger = logging.getLogger('Core.ScheduleRuntime')
 
+# Constants for interval validation
+# QTimer uses 32-bit signed integer for milliseconds
+# Maximum safe value: 2^31-1 = 2,147,483,647 ms ≈ 24.8 days
+MAX_TIMER_INTERVAL_SECONDS = 2147483  # ~24.8 days
+
 
 class ScheduleState(Enum):
     """Schedule states"""
@@ -94,6 +99,12 @@ class ScheduleRuntime(QObject):
         """
         if script_name in self._active_schedules:
             raise RuntimeError(f"Schedule for '{script_name}' is already active")
+
+        # Validate interval to prevent timer overflow
+        if interval_seconds > MAX_TIMER_INTERVAL_SECONDS:
+            raise ValueError(
+                f"Interval {interval_seconds}s exceeds maximum of {MAX_TIMER_INTERVAL_SECONDS}s (~24.8 days)"
+            )
 
         logger.info(f"Starting schedule for '{script_name}' (interval: {interval_seconds}s)")
 
@@ -199,6 +210,12 @@ class ScheduleRuntime(QObject):
         if script_name not in self._active_schedules:
             logger.warning(f"Schedule for '{script_name}' not found")
             return False
+
+        # Validate interval to prevent timer overflow
+        if new_interval_seconds > MAX_TIMER_INTERVAL_SECONDS:
+            raise ValueError(
+                f"Interval {new_interval_seconds}s exceeds maximum of {MAX_TIMER_INTERVAL_SECONDS}s (~24.8 days)"
+            )
 
         handle = self._active_schedules[script_name]
         old_interval = handle.interval_seconds
