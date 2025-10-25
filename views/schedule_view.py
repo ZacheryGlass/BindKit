@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QPushButton,
     QSpinBox, QComboBox, QGroupBox, QSplitter, QMessageBox, QLineEdit,
     QToolButton, QButtonGroup, QTableWidget, QTableWidgetItem, QHeaderView,
-    QAbstractItemView, QSizePolicy
+    QAbstractItemView, QSizePolicy, QFrame
 )
 
 logger = logging.getLogger('Views.ScheduleView')
@@ -53,16 +53,38 @@ class ScheduleView(QWidget):
         layout = QVBoxLayout(self)
         layout.setSpacing(12)
 
-        overview_box = QGroupBox("Schedule Overview")
-        overview_layout = QHBoxLayout()
-        overview_layout.setContentsMargins(12, 10, 12, 10)
+        header_frame = QFrame()
+        header_frame.setObjectName("overviewFrame")
+        header_frame.setSizePolicy(
+            QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        )
+        header_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        header_frame.setFrameShadow(QFrame.Shadow.Plain)
+        header_frame.setStyleSheet(
+            "#overviewFrame {"
+            " border: 1px solid rgba(255, 255, 255, 0.08);"
+            " border-radius: 8px;"
+            " }"
+        )
+
+        overview_layout = QVBoxLayout(header_frame)
+        overview_layout.setContentsMargins(12, 8, 12, 8)
+        overview_layout.setSpacing(8)
+
+        overview_row = QHBoxLayout()
+        overview_row.setContentsMargins(0, 0, 0, 0)
+        title_label = QLabel("Schedule Overview")
+        title_label.setStyleSheet("font-weight: bold;")
+        overview_row.addWidget(title_label)
         self.summary_label = QLabel("Load scripts to view schedules.")
-        overview_layout.addWidget(self.summary_label)
-        overview_layout.addStretch()
-        overview_box.setLayout(overview_layout)
-        layout.addWidget(overview_box)
+        self.summary_label.setObjectName("summaryLabel")
+        self.summary_label.setStyleSheet("color: #aeb4c2;")
+        overview_row.addWidget(self.summary_label, 1)
+        overview_row.addStretch()
+        overview_layout.addLayout(overview_row)
 
         controls_layout = QHBoxLayout()
+        controls_layout.setContentsMargins(0, 0, 0, 0)
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search scripts...")
         self.search_input.textChanged.connect(self._on_search_changed)
@@ -89,7 +111,8 @@ class ScheduleView(QWidget):
             filter_layout.addWidget(btn)
         filter_layout.addStretch()
         controls_layout.addLayout(filter_layout, 2)
-        layout.addLayout(controls_layout)
+        overview_layout.addLayout(controls_layout)
+        layout.addWidget(header_frame)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
 
