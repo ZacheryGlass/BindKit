@@ -44,6 +44,7 @@ class ScheduleHandle:
     last_run: Optional[float] = None
     next_run: Optional[float] = None
     is_executing: bool = False
+    is_stopping: bool = False  # Flag to prevent race condition during stop
     state: ScheduleState = ScheduleState.SCHEDULED
     execution_callback: Optional[Callable] = None  # Called when schedule fires
 
@@ -173,6 +174,9 @@ class ScheduleRuntime(QObject):
             return False
 
         handle = self._active_schedules[script_name]
+
+        # Set stopping flag to prevent race condition with execution
+        handle.is_stopping = True
         handle.state = ScheduleState.STOPPED
 
         logger.info(f"Stopping schedule for '{script_name}'")
@@ -287,6 +291,11 @@ class ScheduleRuntime(QObject):
             return
 
         handle = self._active_schedules[script_name]
+
+        # Check if schedule is being stopped (race condition prevention)
+        if handle.is_stopping:
+            logger.debug(f"Skipping execution of '{script_name}' (schedule is stopping)")
+            return
 
         # Check for overlap: if already executing, skip this run
         if handle.is_executing:
