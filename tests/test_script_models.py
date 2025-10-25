@@ -200,13 +200,13 @@ class TestScriptExecutionModel(unittest.TestCase):
         started_spy = QSignalSpy(self.model.script_execution_started)
         completed_spy = QSignalSpy(self.model.script_execution_completed)
         failed_spy = QSignalSpy(self.model.script_execution_failed)
-        
-        # Execute script
-        result = self.model.execute_script("Test Script")
-        
+
+        # Execute script synchronously (not async) for test predictability
+        result = self.model.execute_script("Test Script", async_execution=False)
+
         # Check result
         self.assertTrue(result)
-        
+
         # Check signals
         self.assertEqual(len(started_spy), 1)
         self.assertEqual(len(completed_spy), 1)
@@ -228,18 +228,18 @@ class TestScriptExecutionModel(unittest.TestCase):
             'success': False,
             'message': 'Test execution failed'
         }
-        
+
         # Set up signal spies
         started_spy = QSignalSpy(self.model.script_execution_started)
         completed_spy = QSignalSpy(self.model.script_execution_completed)
         failed_spy = QSignalSpy(self.model.script_execution_failed)
-        
-        # Execute script
-        result = self.model.execute_script("Test Script")
-        
+
+        # Execute script synchronously (not async) for test predictability
+        result = self.model.execute_script("Test Script", async_execution=False)
+
         # Check result
         self.assertFalse(result)
-        
+
         # Check signals
         self.assertEqual(len(started_spy), 1)
         self.assertEqual(len(completed_spy), 0)

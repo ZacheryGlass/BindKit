@@ -126,7 +126,7 @@ class TestHotkeyRegistry:
 
         registry.add_hotkey("TestScript", "Ctrl+Alt+T")
 
-        hotkey = registry.get_hotkey_for_script("TestScript")
+        hotkey = registry.get_hotkey("TestScript")
 
         assert hotkey == "Ctrl+Alt+T"
 
@@ -134,7 +134,7 @@ class TestHotkeyRegistry:
         """Test getting hotkey for script that has none"""
         registry = HotkeyRegistry(mock_settings)
 
-        hotkey = registry.get_hotkey_for_script("NonexistentScript")
+        hotkey = registry.get_hotkey("NonexistentScript")
 
         assert hotkey is None
 
@@ -358,8 +358,8 @@ class TestHotkeyRegistry:
         registry.add_hotkey("TestScript", "Ctrl+Alt+T")
 
         # Try to access with different case
-        hotkey1 = registry.get_hotkey_for_script("TestScript")
-        hotkey2 = registry.get_hotkey_for_script("testscript")
+        hotkey1 = registry.get_hotkey("TestScript")
+        hotkey2 = registry.get_hotkey("testscript")
 
         # Behavior depends on whether script names are case-sensitive
 

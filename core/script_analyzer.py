@@ -76,6 +76,13 @@ class ScriptAnalyzer:
             # Determine if script needs configuration
             needs_configuration = self._determine_configuration_needs(arguments)
 
+            # Determine if script is actually executable (has executable code)
+            is_executable = has_main_block or has_main_function
+            if not is_executable:
+                # Check if script has any code beyond imports
+                has_code = self._has_executable_code(tree)
+                is_executable = has_code
+
             return ScriptInfo(
                 file_path=script_path,
                 display_name=display_name,
@@ -83,7 +90,7 @@ class ScriptAnalyzer:
                 main_function='main' if has_main_function else None,
                 arguments=arguments,
                 has_main_block=has_main_block,
-                is_executable=True,
+                is_executable=is_executable,
                 needs_configuration=needs_configuration
             )
             
@@ -235,22 +242,49 @@ class ScriptAnalyzer:
     
     def _determine_execution_strategy(self, has_main_function: bool, has_main_block: bool, arguments: List[ArgumentInfo]) -> ExecutionStrategy:
         """Determine the best execution strategy for the script."""
-        
+
         # If script has arguments, prefer subprocess execution for easier argument passing
         if arguments:
             return ExecutionStrategy.SUBPROCESS
-        
+
         # If has main function, prefer function call
         if has_main_function:
             return ExecutionStrategy.FUNCTION_CALL
-        
+
         # If has main block, use subprocess
         if has_main_block:
             return ExecutionStrategy.SUBPROCESS
-        
+
         # Default to module execution
         return ExecutionStrategy.MODULE_EXEC
-    
+
+    def _has_executable_code(self, tree: ast.AST) -> bool:
+        """Check if script has any executable code beyond imports."""
+        for node in ast.walk(tree):
+            # Ignore imports
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                continue
+
+            # Ignore module-level docstrings (string expressions at module level)
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
+                if isinstance(node.value.value, str):
+                    continue
+
+            # Look for actual executable statements
+            if isinstance(node, (ast.Assign, ast.FunctionDef, ast.ClassDef,
+                               ast.For, ast.While, ast.If, ast.With, ast.Try,
+                               ast.Expr, ast.Call)):
+                # For Expr nodes, check if it's not just a docstring
+                if isinstance(node, ast.Expr):
+                    if not isinstance(node.value, ast.Constant):
+                        return True
+                    if not isinstance(node.value.value, str):
+                        return True
+                else:
+                    return True
+
+        return False
+
     def _determine_configuration_needs(self, arguments: List[ArgumentInfo]) -> bool:
         """Determine if a script needs user configuration based on its arguments."""
         if not arguments:

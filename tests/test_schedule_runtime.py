@@ -221,11 +221,11 @@ class TestScheduleRuntime:
             execution_times.append(time.time())
             mock_callback()
 
-        # Start schedule with 2-second interval
+        # Start schedule with minimum allowed interval (10 seconds)
         handle = runtime.start_schedule(
             script_name="TimingTest",
             script_path=temp_script_path,
-            interval_seconds=2,  # Short interval for testing (but above minimum)
+            interval_seconds=MIN_INTERVAL_SECONDS,  # Minimum allowed interval
             execution_callback=tracking_callback
         )
 
@@ -233,7 +233,7 @@ class TestScheduleRuntime:
         # This requires the actual timer to fire
         # Note: This test may be flaky depending on system load
 
-        time.sleep(2.5)  # Wait for at least one execution
+        time.sleep(11)  # Wait for at least one execution (10s + buffer)
         qapp.processEvents()  # Process Qt events
 
         runtime.stop_schedule("TimingTest")

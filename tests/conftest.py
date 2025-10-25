@@ -73,6 +73,7 @@ def mock_settings():
     settings.get_disabled_scripts = Mock(return_value=[])
     settings.get_external_scripts = Mock(return_value={})
     settings.get_status_refresh_seconds = Mock(return_value=5)
+    settings.get_script_timeout_seconds = Mock(return_value=30)
     settings.settings = MagicMock()
     return settings
 

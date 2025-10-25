@@ -274,10 +274,11 @@ def test_func_{i}():
             script_content = 'def test(): return True'
             script_path = create_test_script(temp_dir, 'ttl_test', script_content)
 
-            # Add a fake module to cache
+            # Add a fake module to cache with old timestamp
             module_name = "ttl_test_module"
             executor.loaded_modules[module_name] = Mock()
-            executor.module_access_times[module_name] = time.time() - 2  # 2 seconds ago
+            # Set the access time to long ago (10 seconds ago, well past 1 second TTL)
+            executor.module_access_times[module_name] = time.time() - 10
 
             # Trigger cleanup
             executor._cleanup_stale_modules()
