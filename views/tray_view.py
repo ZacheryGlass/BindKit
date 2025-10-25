@@ -32,7 +32,10 @@ class TrayView(QObject):
     title_clicked = pyqtSignal()
     exit_requested = pyqtSignal()
     settings_requested = pyqtSignal()
-    
+
+    # Cleanup configuration
+    _CLEANUP_FREQUENCY = 5  # Perform aggressive cleanup every N menu updates
+
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__()
         self.parent = parent
@@ -128,9 +131,9 @@ class TrayView(QObject):
             
             logger.debug(f"Menu updated with {len(menu_items)} items")
             
-            # Perform aggressive cleanup every 5 updates instead of 10 for better memory management
+            # Perform aggressive cleanup periodically for better memory management
             self._menu_update_count += 1
-            if self._menu_update_count % 5 == 0:
+            if self._menu_update_count % self._CLEANUP_FREQUENCY == 0:
                 self._perform_aggressive_cleanup()
             
         except Exception as e:
@@ -240,7 +243,7 @@ class TrayView(QObject):
                     # Disconnect all signals
                     try:
                         action.triggered.disconnect()
-                    except TypeError:
+                    except (TypeError, RuntimeError):
                         # Signal not connected or already disconnected
                         pass
 
