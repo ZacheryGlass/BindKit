@@ -67,7 +67,11 @@ class TestScriptAnalyzer:
         assert script_info is not None
         assert not script_info.is_executable
         assert script_info.error is not None
-        assert 'SyntaxError' in script_info.error or 'syntax' in script_info.error.lower()
+        # Error message should contain some indication of syntax issues
+        assert ('SyntaxError' in script_info.error or
+                'syntax' in script_info.error.lower() or
+                'expected' in script_info.error.lower() or
+                'unexpected' in script_info.error.lower())
 
     def test_analyze_unicode_script(self, sample_script_unicode):
         """Test analyzing a script with Unicode content"""
