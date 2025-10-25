@@ -150,6 +150,24 @@ class HotkeyManager(QObject):
         self.next_id = 1
         
         logger.info("HotkeyManager initialized")
+
+    @staticmethod
+    def _winapi_call_succeeded(result: Optional[int]) -> bool:
+        """
+        Interpret pywin32 BOOL return values.
+
+        pywin32 typically returns None to indicate success for BOOL-returning APIs
+        (and raises a pywintypes.error on failure). Treat None or any non-zero
+        integer as success, and 0 as an explicit failure sentinel.
+        """
+        return result is None or result != 0
+
+    @staticmethod
+    def _describe_winapi_result(api_name: str, result: Optional[int]) -> str:
+        """Return a friendly description for logging."""
+        if result is None:
+            return f"{api_name} returned None (expected for pywin32 success)"
+        return f"{api_name} returned {result}"
     
     def start(self):
         """Start the hotkey system by creating the widget in main thread"""
@@ -395,12 +413,11 @@ class HotkeyManager(QObject):
         
         # Attempt to register with Windows using the widget's HWND
         try:
-            # RegisterHotKey returns 0 on failure, non-zero on success (Windows API convention)
             result = win32gui.RegisterHotKey(
                 self.widget.hwnd, hotkey_id, modifiers, vk_code
             )
 
-            if result == 0:
+            if not self._winapi_call_succeeded(result):
                 # Registration failed - retrieve error code for diagnostics
                 import win32api
                 error_code = win32api.GetLastError()
@@ -412,8 +429,8 @@ class HotkeyManager(QObject):
                 self.registration_failed.emit(script_name, normalized, error_msg)
                 return False
 
-            # Validate that we got a valid success code
-            logger.debug(f"RegisterHotKey returned {result} for hotkey {normalized}")
+            # Validate that we got a valid success code (pywin32 returns None on success)
+            logger.debug(f"{self._describe_winapi_result('RegisterHotKey', result)} for hotkey {normalized}")
             
             # Registration successful
             self.hotkeys[hotkey_id] = (script_name, normalized)
@@ -567,7 +584,7 @@ class HotkeyManager(QObject):
                         self.widget.hwnd, test_id, modifiers, vk_code
                     )
                     
-                    if result == 0:
+                    if not self._winapi_call_succeeded(result):
                         # Registration failed - hotkey is likely taken by another app
                         import win32api
                         error_code = win32api.GetLastError()
