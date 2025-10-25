@@ -743,10 +743,10 @@ class SettingsManager(QObject):
             Dictionary with keys: enabled, interval_seconds, last_run, next_run
         """
         return {
-            'enabled': self.get(f'schedule_config/{script_name}/enabled', False),
-            'interval_seconds': self.get(f'schedule_config/{script_name}/interval_seconds', 3600),
-            'last_run': self.get(f'schedule_config/{script_name}/last_run', None),
-            'next_run': self.get(f'schedule_config/{script_name}/next_run', None)
+            'enabled': self.is_script_scheduled(script_name),
+            'interval_seconds': self.get_schedule_interval(script_name),
+            'last_run': self.get_schedule_last_run(script_name),
+            'next_run': self.get_schedule_next_run(script_name)
         }
 
     def set_schedule_config(self, script_name: str, config: Dict[str, Any]) -> None:
@@ -761,7 +761,14 @@ class SettingsManager(QObject):
 
     def get_schedule_interval(self, script_name: str) -> int:
         """Get the interval (in seconds) for a script's schedule."""
-        return self.get(f'schedule_config/{script_name}/interval_seconds', 3600)
+        value = self.get(f'schedule_config/{script_name}/interval_seconds', 3600)
+        # Handle case where interval might be stored as string
+        if isinstance(value, str):
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                return 3600  # Return default if conversion fails
+        return value
 
     def set_schedule_last_run(self, script_name: str, timestamp: Optional[float]) -> None:
         """Update the last run timestamp for a scheduled script."""
