@@ -38,17 +38,23 @@ class SettingsController(QObject):
     
     def __init__(self, app_model, script_controller, parent=None):
         super().__init__(parent)
-        
+
         self._app_model = app_model
         self._script_controller = script_controller
         self._script_collection = script_controller._script_collection
         self._script_execution = script_controller._script_execution
         self._hotkey_model = script_controller._hotkey_model
         self._settings_manager = self._script_collection._settings
-        
+
         # Track current settings state
         self._current_settings = {}
-        
+
+        # Reference to settings view (set after view is created)
+        self._settings_view = None
+
+        # Reference to schedule runtime for signal connections
+        self._schedule_runtime = None
+
         logger.info("SettingsController initialized")
     
     # Loading methods
@@ -684,3 +690,66 @@ class SettingsController(QObject):
         except Exception as e:
             logger.error(f"Error getting schedule info for {script_name}: {e}")
             return None
+
+    def on_schedule_info_requested(self, script_name: str) -> None:
+        """Handle request for schedule info from the schedule view.
+
+        Called when user selects a script in the schedule view.
+
+        Args:
+            script_name: Name of the script that was selected
+        """
+        try:
+            schedule_info = self.get_schedule_info_for_display(script_name)
+            if schedule_info and self._settings_view:
+                self._settings_view.update_schedule_info(script_name, schedule_info)
+        except Exception as e:
+            logger.error(f"Error handling schedule info request for {script_name}: {e}")
+
+    def on_schedule_executed(self, script_name: str) -> None:
+        """Handle schedule execution event from ScheduleRuntime.
+
+        Called when a scheduled script executes.
+
+        Args:
+            script_name: Name of the script that executed
+        """
+        try:
+            if self._settings_view:
+                schedule_info = self.get_schedule_info_for_display(script_name)
+                if schedule_info:
+                    self._settings_view.update_schedule_info(script_name, schedule_info)
+        except Exception as e:
+            logger.error(f"Error handling schedule executed for {script_name}: {e}")
+
+    def on_schedule_started(self, script_name: str) -> None:
+        """Handle schedule start event from ScheduleRuntime.
+
+        Called when a schedule is started.
+
+        Args:
+            script_name: Name of the script that started scheduling
+        """
+        try:
+            if self._settings_view:
+                schedule_info = self.get_schedule_info_for_display(script_name)
+                if schedule_info:
+                    self._settings_view.update_schedule_info(script_name, schedule_info)
+        except Exception as e:
+            logger.error(f"Error handling schedule started for {script_name}: {e}")
+
+    def on_schedule_stopped(self, script_name: str) -> None:
+        """Handle schedule stop event from ScheduleRuntime.
+
+        Called when a schedule is stopped.
+
+        Args:
+            script_name: Name of the script that stopped scheduling
+        """
+        try:
+            if self._settings_view:
+                schedule_info = self.get_schedule_info_for_display(script_name)
+                if schedule_info:
+                    self._settings_view.update_schedule_info(script_name, schedule_info)
+        except Exception as e:
+            logger.error(f"Error handling schedule stopped for {script_name}: {e}")

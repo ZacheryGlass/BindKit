@@ -29,17 +29,24 @@ class ScheduleView(QWidget):
     - schedule_enabled_changed: Emitted when enabling/disabling a schedule
     - schedule_interval_changed: Emitted when interval is changed
     - run_now_requested: Emitted when "Run Now" button is clicked
+    - schedule_info_requested: Emitted when schedule info should be fetched for a script
     """
 
     schedule_enabled_changed = pyqtSignal(str, bool)  # script_name, enabled
     schedule_interval_changed = pyqtSignal(str, int)  # script_name, interval_seconds
     run_now_requested = pyqtSignal(str)  # script_name
+    schedule_info_requested = pyqtSignal(str)  # script_name
 
     def __init__(self, parent=None):
         """Initialize the schedule view."""
         super().__init__(parent)
         self.selected_script = None
         self.script_list = []
+
+        # Timer for periodic refresh of "Next run" display
+        self._refresh_timer = QTimer()
+        self._refresh_timer.timeout.connect(self._refresh_next_run_display)
+
         self._setup_ui()
 
     def _setup_ui(self):
@@ -219,14 +226,21 @@ class ScheduleView(QWidget):
         if not items:
             self.selected_script = None
             self._update_config_panel(None)
+            self._refresh_timer.stop()
             return
 
         item = items[0]
         self.selected_script = item.data(Qt.ItemDataRole.UserRole)
         logger.debug(f"Selected script: {self.selected_script}")
 
-        # This should be updated by the controller
+        # Request current schedule info from controller
+        self.schedule_info_requested.emit(self.selected_script)
+
+        # Update config panel UI state
         self._update_config_panel(self.selected_script)
+
+        # Start refresh timer for next run countdown
+        self._refresh_timer.start(1000)  # Update every second
 
     def _on_schedule_enabled_changed(self, state):
         """Handle schedule enabled checkbox change."""
@@ -298,6 +312,28 @@ class ScheduleView(QWidget):
             for widget in widgets:
                 widget.blockSignals(False)
 
+    def _refresh_next_run_display(self):
+        """Periodically refresh the next run time display (countdown)."""
+        if not self.selected_script or not hasattr(self, '_next_run_timestamp'):
+            return
+
+        # Use the stored timestamp to calculate time remaining
+        import time
+        timestamp = self._next_run_timestamp
+        if timestamp is None:
+            self.set_next_run(None)
+            return
+
+        # If the time has already passed, recalculate and request refresh
+        current_time = time.time()
+        if current_time >= timestamp:
+            # Schedule may have just executed; don't update to prevent flicker
+            # The controller will send a fresh update
+            return
+
+        # Update display with the stored timestamp
+        self.set_next_run(timestamp)
+
     def update_schedule_info(self, script_name: str, schedule_info: dict):
         """
         Update schedule information for display.
@@ -316,3 +352,6 @@ class ScheduleView(QWidget):
         self.set_last_run(schedule_info.get('last_run'))
         self.set_next_run(schedule_info.get('next_run'))
         self.set_status(schedule_info.get('status', 'Idle'))
+
+        # Store the next run timestamp for periodic refresh
+        self._next_run_timestamp = schedule_info.get('next_run')
