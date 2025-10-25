@@ -79,23 +79,7 @@ class SettingsController(QObject):
             self.startup_settings_updated.emit(settings_data['startup'])
             self.behavior_settings_updated.emit(settings_data['behavior'])
             self.execution_settings_updated.emit(settings_data['execution'])
-            self.script_list_updated.emit(settings_data['scripts'])
-
-            # Populate schedule data if settings view is available
-            try:
-                if hasattr(self, '_settings_view') and self._settings_view:
-                    # Set script list for schedule tab
-                    self._settings_view.set_schedule_scripts(settings_data['scripts'])
-
-                    # Update schedule info for each script
-                    # Use file stem (script['name']) for schedule operations to match ScheduleView's internal identifier
-                    for script in settings_data['scripts']:
-                        script_stem = script['name']  # File stem identifier
-                        schedule_info = self.get_schedule_info_for_display(script_stem)
-                        if schedule_info:
-                            self._settings_view.update_schedule_info(script_stem, schedule_info)
-            except Exception as e:
-                logger.debug(f"Could not populate schedule tab (view may not be initialized yet): {e}")
+            self._emit_script_list_update(settings_data['scripts'])
 
             logger.info("Settings loaded successfully")
 
@@ -154,7 +138,67 @@ class SettingsController(QObject):
     def _update_script_list(self):
         """Update and emit the script list - called when script collection changes."""
         scripts = self._load_script_configurations()
+        self._emit_script_list_update(scripts)
+
+    def _emit_script_list_update(self, scripts: List[Dict[str, Any]]):
+        """Emit script list changes and refresh schedule tab state when visible."""
         self.script_list_updated.emit(scripts)
+        self._refresh_schedule_view_for_scripts(scripts)
+
+    def _refresh_schedule_view_for_scripts(self, scripts: List[Dict[str, Any]]):
+        """Push current schedule info for every script so the UI stays in sync."""
+        if not self._settings_view:
+            return
+
+        for script in scripts or []:
+            lookup_name = script.get('name') or script.get('display_name') or script.get('original_display_name')
+            if not lookup_name:
+                continue
+            schedule_key = script.get('name') or self._resolve_script_stem(lookup_name) or lookup_name
+            schedule_info = self.get_schedule_info_for_display(schedule_key)
+            if schedule_info:
+                try:
+                    self._settings_view.update_schedule_info(schedule_key, schedule_info)
+                except Exception as update_error:
+                    logger.debug(f"Could not push schedule info for {lookup_name}: {update_error}")
+
+    def _resolve_script_stem(self, script_name: Optional[str]) -> Optional[str]:
+        """Return the canonical file stem for a script display name or identifier."""
+        if not script_name:
+            return None
+        script_info = self._script_collection.get_script_by_name(script_name)
+        if script_info and getattr(script_info, 'file_path', None):
+            try:
+                return script_info.file_path.stem
+            except Exception:
+                return None
+        return None
+
+    def _notify_schedule_view(
+        self,
+        script_name: str,
+        status_override: Optional[str] = None,
+        script_stem: Optional[str] = None
+    ) -> None:
+        """Update the schedule tab for a single script if the view is open."""
+        if not self._settings_view:
+            return
+
+        schedule_key = script_stem or self._resolve_script_stem(script_name) or script_name
+        if not schedule_key:
+            return
+
+        schedule_info = self.get_schedule_info_for_display(schedule_key)
+        if not schedule_info:
+            return
+
+        if status_override:
+            schedule_info['status'] = status_override
+
+        try:
+            self._settings_view.update_schedule_info(schedule_key, schedule_info)
+        except Exception as update_error:
+            logger.debug(f"Could not refresh schedule UI for {schedule_key}: {update_error}")
 
     # Startup settings methods
     def set_run_on_startup(self, enabled: bool):
@@ -213,7 +257,7 @@ class SettingsController(QObject):
                 self._script_controller.disable_script(script_name)
             
             # Refresh script list
-            self.script_list_updated.emit(self._load_script_configurations())
+            self._emit_script_list_update(self._load_script_configurations())
             
         except Exception as e:
             logger.error(f"Error toggling script {script_name}: {e}")
@@ -265,7 +309,7 @@ class SettingsController(QObject):
                 self._settings_manager.remove_custom_name(display_name)
 
             # Refresh script list so the view reflects updated display names
-            self.script_list_updated.emit(self._load_script_configurations())
+            self._emit_script_list_update(self._load_script_configurations())
 
         except Exception as e:
             logger.error(f"Error setting custom name for {script_name}: {e}")
@@ -549,6 +593,7 @@ class SettingsController(QObject):
 
                 if success:
                     logger.info(f"Schedule enabled for {script_name}")
+                    self._notify_schedule_view(script_name, script_stem=script_stem)
                     return True
                 else:
                     # Revert setting if start failed
@@ -561,6 +606,8 @@ class SettingsController(QObject):
                     logger.error(f"Script not found: {script_name}")
                     return False
 
+                script_stem = script_info.file_path.stem
+
                 # Mark as disabled in settings
                 self._script_controller.set_schedule_enabled(script_name, False)
 
@@ -569,6 +616,7 @@ class SettingsController(QObject):
 
                 if success:
                     logger.info(f"Schedule disabled for {script_name}")
+                    self._notify_schedule_view(script_name, script_stem=script_stem)
                     return True
                 else:
                     logger.error(f"Failed to stop schedule for {script_name}")
@@ -609,6 +657,7 @@ class SettingsController(QObject):
                 executor.schedule_runtime.update_interval(script_stem, interval_seconds)
                 logger.info(f"Updated running schedule for {script_name} to {interval_seconds}s")
 
+            self._notify_schedule_view(script_name, script_stem=script_stem)
             return True
 
         except Exception as e:
@@ -732,9 +781,7 @@ class SettingsController(QObject):
             script_name: Name of the script that was selected
         """
         try:
-            schedule_info = self.get_schedule_info_for_display(script_name)
-            if schedule_info and self._settings_view:
-                self._settings_view.update_schedule_info(script_name, schedule_info)
+            self._notify_schedule_view(script_name, script_stem=script_name)
         except Exception as e:
             logger.error(f"Error handling schedule info request for {script_name}: {e}")
 
@@ -747,10 +794,7 @@ class SettingsController(QObject):
             script_name: Name of the script that executed
         """
         try:
-            if self._settings_view:
-                schedule_info = self.get_schedule_info_for_display(script_name)
-                if schedule_info:
-                    self._settings_view.update_schedule_info(script_name, schedule_info)
+            self._notify_schedule_view(script_name, script_stem=script_name)
         except Exception as e:
             logger.error(f"Error handling schedule executed for {script_name}: {e}")
 
@@ -763,10 +807,7 @@ class SettingsController(QObject):
             script_name: Name of the script that started scheduling
         """
         try:
-            if self._settings_view:
-                schedule_info = self.get_schedule_info_for_display(script_name)
-                if schedule_info:
-                    self._settings_view.update_schedule_info(script_name, schedule_info)
+            self._notify_schedule_view(script_name, script_stem=script_name)
         except Exception as e:
             logger.error(f"Error handling schedule started for {script_name}: {e}")
 
@@ -779,9 +820,32 @@ class SettingsController(QObject):
             script_name: Name of the script that stopped scheduling
         """
         try:
-            if self._settings_view:
-                schedule_info = self.get_schedule_info_for_display(script_name)
-                if schedule_info:
-                    self._settings_view.update_schedule_info(script_name, schedule_info)
+            self._notify_schedule_view(script_name, script_stem=script_name)
         except Exception as e:
             logger.error(f"Error handling schedule stopped for {script_name}: {e}")
+
+    def on_schedule_error(self, script_name: str, error_message: str) -> None:
+        """Surface runtime schedule errors immediately in the UI."""
+        try:
+            display_name = self._get_display_name_for_stem(script_name) or script_name
+            logger.error(f"Schedule error for {display_name}: {error_message}")
+            status_text = f"Error: {error_message}"
+            self._notify_schedule_view(
+                script_name,
+                status_override=status_text,
+                script_stem=script_name
+            )
+        except Exception as e:
+            logger.error(f"Error handling schedule error for {script_name}: {e}")
+
+    def on_schedule_execution_blocked(self, script_name: str) -> None:
+        """Handle overlap-prevention notices so the UI reflects skipped runs."""
+        try:
+            status_text = "Execution blocked (previous run still running)"
+            self._notify_schedule_view(
+                script_name,
+                status_override=status_text,
+                script_stem=script_name
+            )
+        except Exception as e:
+            logger.error(f"Error handling schedule execution block for {script_name}: {e}")

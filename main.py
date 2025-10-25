@@ -569,6 +569,10 @@ class MVCApplication:
                 schedule_runtime.schedule_executed.connect(self._settings_controller.on_schedule_executed)
                 schedule_runtime.schedule_started.connect(self._settings_controller.on_schedule_started)
                 schedule_runtime.schedule_stopped.connect(self._settings_controller.on_schedule_stopped)
+                schedule_runtime.schedule_error.connect(self._settings_controller.on_schedule_error)
+                schedule_runtime.schedule_execution_blocked.connect(
+                    self._settings_controller.on_schedule_execution_blocked
+                )
                 self._settings_controller._schedule_runtime = schedule_runtime
                 self.logger.info("Connected schedule runtime signals to settings controller")
         except (AttributeError, TypeError, RuntimeError) as e:
@@ -606,6 +610,8 @@ class MVCApplication:
                     (runtime.schedule_executed, controller.on_schedule_executed),
                     (runtime.schedule_started, controller.on_schedule_started),
                     (runtime.schedule_stopped, controller.on_schedule_stopped),
+                    (runtime.schedule_error, controller.on_schedule_error),
+                    (runtime.schedule_execution_blocked, controller.on_schedule_execution_blocked),
                 )
                 for signal_obj, slot in connections:
                     try:

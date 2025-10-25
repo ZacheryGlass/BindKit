@@ -196,13 +196,6 @@ class PresetEditorView(QDialog):
         
         layout.addWidget(right_widget)
 
-        # Hide preset selection panel; selection happens in Settings -> Script Args
-        try:
-            left_widget.hide()
-            splitter.setSizes([0, 1])
-        except Exception:
-            pass
-        
         # Pre-fill for edit
         if self.initial_name:
             self.preset_name_edit.setText(self.initial_name)
