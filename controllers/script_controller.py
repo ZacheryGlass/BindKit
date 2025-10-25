@@ -227,7 +227,7 @@ class ScriptController(QObject):
             return False
 
         # Get the script executor from the script execution model
-        executor = self._script_execution._executor
+        executor = self._script_execution._script_loader.executor
         if not executor:
             logger.error("Script executor not available")
             return False
@@ -259,7 +259,7 @@ class ScriptController(QObject):
             logger.error(f"Script not found for schedule stop: {script_name}")
             return False
 
-        executor = self._script_execution._executor
+        executor = self._script_execution._script_loader.executor
         if not executor:
             logger.error("Script executor not available")
             return False
@@ -288,7 +288,7 @@ class ScriptController(QObject):
         if not script_info:
             return False
 
-        executor = self._script_execution._executor
+        executor = self._script_execution._script_loader.executor
         if not executor:
             return False
 

@@ -597,7 +597,7 @@ class SettingsController(QObject):
             self._settings_manager.set_schedule_interval(script_stem, interval_seconds)
 
             # If schedule is currently running, update it
-            executor = self._script_execution._executor
+            executor = self._script_execution._script_loader.executor
             if executor and executor.is_schedule_running(script_stem):
                 # Stop and restart with new interval
                 executor.schedule_runtime.update_interval(script_stem, interval_seconds)

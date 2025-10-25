@@ -222,7 +222,8 @@ class AppController(QObject):
                 return
 
             # Get all scripts that have scheduling enabled
-            scheduled_scripts = self._script_execution._executor.settings_manager.get_all_scheduled_scripts()
+            executor = self._script_execution._script_loader.executor
+            scheduled_scripts = executor.settings.get_all_scheduled_scripts()
 
             if not scheduled_scripts:
                 logger.info("No scheduled scripts configured")
@@ -244,7 +245,7 @@ class AppController(QObject):
                         continue
 
                     # Get interval from settings
-                    interval_seconds = self._script_execution._executor.settings_manager.get_schedule_interval(script_stem)
+                    interval_seconds = executor.settings.get_schedule_interval(script_stem)
 
                     # Start the schedule via ScriptController
                     display_name = self._script_collection.get_script_display_name(script_info)
