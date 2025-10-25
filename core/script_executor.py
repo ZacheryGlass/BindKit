@@ -487,9 +487,10 @@ class ScriptExecutor:
                 )
 
             # Create execution callback that will be called by the schedule
-            def execution_callback(name: str):
+            # Capture immutable copies to prevent stale data from schedule updates
+            def execution_callback(name: str, _script_info=script_info, _args=dict(arguments or {})):
                 """Called when schedule timer fires."""
-                result = self.execute_script(script_info, arguments or {})
+                result = self.execute_script(_script_info, _args)
                 if result.success:
                     logger.info(f"Scheduled execution of '{name}' completed successfully")
                 else:
