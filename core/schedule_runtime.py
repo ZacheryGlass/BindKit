@@ -101,6 +101,7 @@ class ScheduleRuntime(QObject):
 
         Raises:
             RuntimeError: If schedule already exists for this script
+            ValueError: If interval is outside valid range (10s to ~24.8 days)
         """
         # Validate interval bounds
         if interval_seconds < MIN_INTERVAL_SECONDS:
@@ -230,6 +231,9 @@ class ScheduleRuntime(QObject):
 
         Returns:
             True if successful, False if schedule not found
+
+        Raises:
+            ValueError: If interval is outside valid range (10s to ~24.8 days)
         """
         if script_name not in self._active_schedules:
             logger.warning(f"Schedule for '{script_name}' not found")
