@@ -4,11 +4,12 @@
 1. [Overview](#overview)
 2. [System Architecture](#system-architecture)
 3. [Core Components](#core-components)
-4. [GUI Components](#gui-components)
-5. [Script System](#script-system)
-6. [Communication Flow](#communication-flow)
-7. [Error Handling](#error-handling)
-8. [Logging System](#logging-system)
+4. [Schedule Runtime System](#schedule-runtime-system)
+5. [GUI Components](#gui-components)
+6. [Script System](#script-system)
+7. [Communication Flow](#communication-flow)
+8. [Error Handling](#error-handling)
+9. [Logging System](#logging-system)
 
 ## Overview
 
@@ -38,6 +39,7 @@ BindKit is a modular PyQt6 application that automatically discovers and manages 
         │• SettingsDialog│    │• ScriptAnalyzer (AST)               │
         │• HotkeyConfig │    │• ScriptExecutor (Multi-strategy)    │
         │• ThemeManager │    │• ScriptLoader (Discovery)           │
+        │• ScheduleView │    │• ScheduleRuntime (QTimer)            │
         └───────┬───────┘    │• Settings & StartupManager         │
                 │            └─────┬───────────────────────────────┘
                 │                  │
@@ -54,6 +56,16 @@ BindKit is a modular PyQt6 application that automatically discovers and manages 
         │  - Function Call (main function)    │    │• Conflict Detection│
         │  - Module Execution (import)        │    │• System Reserved   │
         └─────────────────────────────────────┘    └────────────────────┘
+                                   │
+                          ┌────────▼────────────┐
+                          │  Schedule System    │
+                          │                    │
+                          ├────────────────────┤
+                          │• QTimer-based      │
+                          │• Interval Schedule │
+                          │• Overlap Prevention│
+                          │• Timestamp Track   │
+                          └────────────────────┘
 ```
 
 ## Core Components
@@ -182,6 +194,59 @@ Responsible for dynamic script discovery and management:
 - **Validation**: Ensures scripts pass validation before loading
 - **Error Isolation**: Catches and logs individual script failures
 - **Hot Reload**: Can reload scripts without restarting application
+
+## Schedule Runtime System
+
+### ScheduleRuntime (`core/schedule_runtime.py`)
+
+QTimer-based scheduling engine for periodic script execution with emphasis on reliability and simplicity.
+
+**Architecture:**
+- **Timer-based Execution**: Uses Qt's QTimer for interval-based scheduling without external cron dependencies
+- **Thread-safe Operations**: Uses locks (threading.Lock) to prevent race conditions during schedule operations
+- **Interval Validation**: Enforces bounds (10 seconds minimum, ~24.8 days maximum) to prevent system overload
+- **Overlap Prevention**: Built-in execution overlap detection prevents concurrent execution of the same script
+- **Graceful Lifecycle**: Proper initialization, cleanup, and shutdown handling
+
+**Key Features:**
+- Schedule state management with ScheduleState enum (STOPPED, SCHEDULED, RUNNING, ERROR)
+- ScheduleHandle dataclass for tracking individual schedules with metadata
+- Signal-based event system for integration with application components
+- Persistent scheduling across application restarts (via SettingsManager)
+
+**Signals:**
+- `schedule_started(str)`: Emitted when schedule begins (script_name)
+- `schedule_stopped(str)`: Emitted when schedule ends (script_name)
+- `schedule_executed(str)`: Emitted on successful execution (script_name)
+- `schedule_error(str, str)`: Emitted on error (script_name, error_message)
+- `schedule_execution_blocked(str)`: Emitted when overlapping execution prevented (script_name)
+
+**Integration:**
+- Connects with ScriptExecutor to trigger actual script execution
+- Updates SettingsManager with execution timestamps for persistence
+- Works with ScheduleView for UI configuration
+- Managed by MainWindow for application lifecycle coordination
+
+### ScheduleView (`views/schedule_view.py`)
+
+UI component for configuring scheduled script execution.
+
+**Features:**
+- **Script Selection**: List of available scripts with selection state tracking
+- **Enable/Disable**: Toggle scheduling per-script with immediate state updates
+- **Interval Configuration**: Spinbox + unit dropdown (seconds, minutes, hours, days)
+- **Status Display**: Shows current schedule state (idle, running, stopped, error)
+- **Execution Tracking**: Displays last run timestamp and next scheduled run time
+- **Manual Trigger**: "Run Now" button for testing without waiting for next interval
+
+**Signals:**
+- `schedule_enabled_changed(str, bool)`: Emitted when enabling/disabling (script_name, enabled)
+- `schedule_interval_changed(str, int)`: Emitted when interval changes (script_name, interval_seconds)
+- `run_now_requested(str)`: Emitted when manual execution requested (script_name)
+
+**Signal Blocking:**
+- Uses blockSignals() during programmatic updates to prevent cascading signal emissions
+- Prevents UI state loops during schedule configuration updates
 
 ## GUI Components
 

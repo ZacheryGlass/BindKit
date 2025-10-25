@@ -8,9 +8,10 @@ This tutorial covers creating scripts for BindKit using both legacy UtilityScrip
 3. [Legacy UtilityScript Examples](#legacy-utilityscript-examples)
 4. [Standalone Script Examples](#standalone-script-examples)
 5. [Global Hotkey Configuration](#global-hotkey-configuration)
-6. [Advanced Techniques](#advanced-techniques)
-7. [Best Practices](#best-practices)
-8. [Troubleshooting](#troubleshooting)
+6. [Scheduled Script Execution](#scheduled-script-execution)
+7. [Advanced Techniques](#advanced-techniques)
+8. [Best Practices](#best-practices)
+9. [Troubleshooting](#troubleshooting)
 
 ## Quick Start
 
@@ -1185,6 +1186,241 @@ Use the built-in "Test Hotkey" script to verify hotkey functionality:
 - The hotkey may be reserved by another application
 - Try a different combination
 - Check the notification area for error messages
+
+## Scheduled Script Execution
+
+Scripts can be configured to run automatically at regular intervals using the built-in scheduler. This is useful for periodic tasks like system maintenance, data backups, or status checks.
+
+### Quick Start: Enabling Schedules
+
+1. **Access Schedule Settings:**
+   - Right-click the system tray icon
+   - Select "Settings..."
+   - Click the "Schedule" tab
+
+2. **Configure a Schedule:**
+   - Select a script from the list
+   - Check "Enable Schedule" to activate scheduling
+   - Set the interval: Choose a number and select the unit (seconds, minutes, hours, or days)
+   - Click "Run Now" to test the script
+   - Click "OK" to save
+
+3. **Monitor Execution:**
+   - View "Last run" time to see when the script last executed
+   - View "Next run" time to see when it will execute next
+   - Check the status display for current execution state
+
+### Interval Configuration
+
+The scheduler supports flexible interval configuration:
+
+**Units:**
+- **Seconds**: For rapid execution (minimum 10 seconds)
+- **Minutes**: For regular checks (e.g., every 30 minutes)
+- **Hours**: For daily maintenance (e.g., every 4 hours)
+- **Days**: For long-term operations (e.g., every 1 day)
+
+**Interval Limits:**
+- **Minimum**: 10 seconds (prevents excessive system load)
+- **Maximum**: ~24.8 days (QTimer 32-bit millisecond limit)
+
+### Overlap Prevention
+
+The scheduler includes automatic overlap prevention to ensure reliable execution:
+
+**What it does:**
+- Prevents the same script from running multiple times simultaneously
+- If a script is still executing when the next interval arrives, that execution is skipped
+- Prevents resource exhaustion and cascading failures
+
+**Implications:**
+- If a script takes longer than its interval to complete, some scheduled runs will be skipped
+- For example: 5-minute interval with a 7-minute execution = some intervals skipped
+- Solution: Increase interval to be longer than typical execution time
+
+**Viewing Overlaps:**
+- Blocked executions are logged in the application
+- Use "Run Now" to manually test if overlaps are occurring
+
+### Best Practices for Scheduled Scripts
+
+**1. Make Scripts Idempotent**
+Scripts should be safe to run multiple times, even if previous runs didn't complete:
+
+```python
+#!/usr/bin/env python3
+"""Script for periodic system cleanup"""
+import json
+
+def main():
+    # Good: Safe to run multiple times
+    # If the file doesn't exist, the check still succeeds
+    try:
+        import os
+        if os.path.exists('/tmp/temp_file'):
+            os.remove('/tmp/temp_file')
+
+        return {
+            'success': True,
+            'message': 'Cleanup completed'
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'message': str(e)
+        }
+```
+
+**2. Set Appropriate Timeouts**
+Ensure scripts complete within reasonable time:
+
+```python
+# Set a timeout for network operations
+result = subprocess.run(
+    ['command'],
+    capture_output=True,
+    timeout=30,  # 30 seconds max
+    creationflags=subprocess.CREATE_NO_WINDOW
+)
+```
+
+**3. Return Proper Status**
+Always return JSON with success/failure status:
+
+```python
+result = {
+    'success': True,
+    'message': 'Operation completed successfully',
+    'data': {'items_processed': 42}
+}
+print(json.dumps(result))
+```
+
+**4. Handle Failures Gracefully**
+Scripts should never crash the scheduler:
+
+```python
+try:
+    # Perform operation
+    perform_operation()
+    return {'success': True, 'message': 'Done'}
+except SpecificError as e:
+    # Handle known errors
+    return {'success': False, 'message': f'Known issue: {e}'}
+except Exception as e:
+    # Catch all unexpected errors
+    logger.error(f"Unexpected error: {e}", exc_info=True)
+    return {'success': False, 'message': 'Unexpected error'}
+```
+
+**5. Log Important Events**
+Use logging for debugging scheduled execution:
+
+```python
+import logging
+logger = logging.getLogger(__name__)
+
+def main():
+    logger.info("Scheduled execution started")
+    try:
+        # Perform work
+        logger.debug("Processing items...")
+        logger.info("Scheduled execution completed")
+    except Exception as e:
+        logger.error(f"Scheduled execution failed: {e}")
+```
+
+### Testing Scheduled Execution
+
+**Using test_scheduled_execution.py:**
+
+The application includes a test script specifically for verifying scheduler functionality:
+
+1. **Configure Schedule:**
+   - Open Settings > Schedule tab
+   - Select "Test Scheduled Execution"
+   - Enable Schedule and set to 1 minute interval
+   - Click "Run Now"
+
+2. **Verify Execution:**
+   - Check the application directory for `scheduled_execution_test.log`
+   - Log file shows each execution with timestamp
+   - Timestamps should match your schedule interval
+
+3. **Test Overlap Prevention:**
+   - Configure with short interval (30 seconds)
+   - Run with delay: `python scripts/test_scheduled_execution.py --delay 60`
+   - Some executions will be skipped due to overlap prevention
+
+### Viewing Execution History
+
+**Last Run:**
+- Shows the exact time the script last executed
+- Format: YYYY-MM-DD HH:MM:SS
+- "Never" indicates the script hasn't run yet
+
+**Next Run:**
+- Shows when the next execution is scheduled
+- Format: YYYY-MM-DD HH:MM:SS
+- Updated each time the script executes
+
+### Persistence Across Restarts
+
+All schedule configurations persist across application restarts:
+
+- **Enabled/Disabled State**: Remembered for each script
+- **Intervals**: Saved with your settings
+- **Execution Times**: Last run and next run timestamps are stored
+- **Auto-start**: Previously enabled schedules automatically start on launch
+
+Schedule settings are stored in the application's settings file and survive application crashes.
+
+### Manual Trigger: "Run Now"
+
+Test scheduled scripts without waiting for the next interval:
+
+1. Select a script from the Schedule list
+2. Click "Run Now"
+3. Script executes immediately (if not already running)
+4. Last run time updates immediately
+
+Useful for:
+- Testing overlap prevention behavior
+- Verifying script works before scheduling
+- Forcing immediate execution for urgent tasks
+
+### Troubleshooting Scheduled Execution
+
+**Schedule not running:**
+1. Check if schedule is enabled (checkbox should be checked)
+2. Verify interval is set (should show a number and unit)
+3. Confirm application is running in system tray
+4. Check that script itself works (test with "Run Now")
+5. Review application logs for error messages
+
+**Script execution failures:**
+1. Click "Run Now" to test script immediately
+2. Check script returns JSON format: `{"success": true/false, "message": "..."}`
+3. Verify script has no unhandled exceptions
+4. Check script dependencies are installed
+5. Review script logs for error details
+
+**Overlapping executions:**
+1. If you see "execution blocked" messages, script is taking longer than interval
+2. Solution: Increase interval to be longer than typical execution time
+3. Example: For a 2-minute execution, use a 5-minute interval minimum
+
+**Timer not starting:**
+1. Check interval is between 10 seconds and ~24.8 days
+2. Verify script name exists in script list
+3. Check application has write permissions for settings
+4. Restart application to clear any stale state
+
+**Settings not persisting:**
+1. Ensure application exits cleanly (right-click tray > Exit)
+2. Check disk space available
+3. Verify application folder is not read-only
+4. Check settings file: `%APPDATA%/BindKit/settings.ini` (Windows)
 
 ## Next Steps
 

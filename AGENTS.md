@@ -56,6 +56,7 @@ Required packages:
 4. **Script Analyzer** (`core/script_analyzer.py`): Uses AST parsing to determine execution strategy (subprocess, function call, or module exec)
 5. **Script Executor** (`core/script_executor.py`): Executes scripts based on analyzer's strategy
 6. **Settings Manager** (`core/settings.py`): Manages application settings and script configurations
+7. **Schedule Runtime** (`core/schedule_runtime.py`): QTimer-based interval scheduling engine that manages automatic periodic script execution with overlap prevention, interval bounds (10s to ~24.8 days), and graceful shutdown handling
 
 ### Script Architecture
 
@@ -109,6 +110,34 @@ Use one of the included scripts in `scripts/` (for example `snipping_tool.py`) o
 ### Modify Tray Menu Structure
 Edit `tray_manager.py` - the `update_tray_menu()` method builds the context menu dynamically.
 
+## Scheduled Script Execution
+
+The scheduler enables time-based execution of scripts at regular intervals, with features for reliability and configuration:
+
+### Configuration
+- Access via Settings dialog > Schedule tab
+- Enable/disable schedules on a per-script basis
+- Configure intervals in seconds, minutes, hours, or days
+- Minimum interval: 10 seconds; Maximum: ~24.8 days
+- Settings persist across application restarts
+
+### Key Features
+- **Overlap Prevention**: Prevents simultaneous executions of the same script, ensuring reliability and resource management
+- **Interval-based Scheduling**: Execute scripts at fixed time intervals without external dependencies
+- **Auto-start**: Enabled schedules automatically start when the application launches
+- **Timestamp Tracking**: Monitors last run and next scheduled run times
+- **Signal-based Events**: Real-time notifications via schedule_started, schedule_stopped, schedule_executed, schedule_error, and schedule_execution_blocked signals
+- **Thread-safe Operations**: Uses locks for race condition prevention and graceful concurrent access
+
+### Usage
+1. Right-click the system tray icon and select "Settings..."
+2. Go to the "Schedule" tab
+3. Select a script from the list
+4. Check "Enable Schedule" to activate scheduling
+5. Set the interval using the spinbox and unit dropdown
+6. Click "Run Now" to manually trigger the script for testing
+7. View "Last run" and "Next run" timestamps to monitor execution
+
 ## Important Files
 
 - `main.py`: Entry point, handles single instance check
@@ -116,4 +145,6 @@ Edit `tray_manager.py` - the `update_tray_menu()` method builds the context menu
 - `core/script_loader.py`: Script discovery and loading
 - `core/hotkey_manager.py`: Global hotkey registration and handling
 - `core/settings.py`: Application and script settings management
+- `core/schedule_runtime.py`: Scheduled script execution engine
+- `views/schedule_view.py`: Schedule configuration UI
 - `scripts/`: Directory for all utility scripts (auto-discovered)

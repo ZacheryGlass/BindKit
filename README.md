@@ -25,6 +25,12 @@ A modular PyQt6 desktop application that runs as a system tray utility, managing
 - **Argument Detection**: Automatic detection of argparse arguments and function parameters
 - **JSON Communication**: Structured result communication between scripts and GUI
 
+### Scheduled Execution
+- **Interval-based Scheduling**: Execute scripts at fixed intervals from 10 seconds to ~24.8 days
+- **Overlap Prevention**: Reliably prevents simultaneous executions of the same script
+- **Auto-start**: Enabled schedules automatically launch on application startup
+- **Per-script Configuration**: Set schedules individually in Settings dialog Schedule tab
+
 ## Installation
 
 1. Install Python 3.8 or higher
@@ -67,6 +73,26 @@ Example hotkey combinations:
 - `Ctrl+Alt+V` - Volume control
 - `Win+Shift+D` - Display toggle
 - `Ctrl+Alt+F1` - Custom script
+
+### Configuring Schedules
+
+1. Right-click the system tray icon
+2. Select "Settings..."
+3. Go to the "Schedule" tab
+4. Select a script from the list
+5. Check "Enable Schedule" to activate scheduling
+6. Set the execution interval:
+   - Choose a time value (1-999999)
+   - Select unit: seconds, minutes, hours, or days
+   - Minimum interval: 10 seconds (prevents excessive load)
+   - Maximum interval: ~24.8 days
+7. View execution times:
+   - **Last run**: Shows when the script last executed (or "Never" if not yet run)
+   - **Next run**: Shows the time of the next scheduled execution
+8. Click "Run Now" to manually trigger the script for testing
+9. Click "OK" to save schedule settings
+
+Schedules persist across application restarts and will automatically resume when BindKit starts.
 
 ## Creating Custom Scripts
 
@@ -152,6 +178,7 @@ The application comes with several example scripts:
 - **Hotkey Test Popup**: Test global hotkey functionality
 - **Power Plan**: Cycle through Windows power plans
 - **Test Hotkey**: Verify hotkey registration (creates desktop file when triggered)
+- **Test Scheduled Execution**: Verify scheduled execution by logging timestamps to a file
 
 ## Architecture
 
@@ -162,17 +189,21 @@ The application comes with several example scripts:
 │   ├── script_analyzer.py    # AST-based script analysis
 │   ├── script_executor.py    # Multi-strategy script execution
 │   ├── script_loader.py      # Dynamic script discovery
+│   ├── schedule_runtime.py   # Scheduled execution engine
 │   └── settings.py           # Application settings
 ├── gui/                      # PyQt6 GUI components
 │   ├── tray_manager.py       # System tray interface (primary UI)
 │   ├── settings_dialog.py    # Settings and configuration
 │   ├── hotkey_configurator.py # Hotkey recording widgets
 │   └── main_window.py        # Hidden parent window
+├── views/                    # UI views and panels
+│   └── schedule_view.py      # Schedule configuration interface
 ├── scripts/                  # Auto-discovered utility scripts
 └── docs/                     # Detailed documentation
     ├── ARCHITECTURE.md       # Technical architecture details
     ├── API_REFERENCE.md      # Complete API documentation
-    └── SCRIPT_TUTORIAL.md    # Script development guide
+    ├── SCRIPT_TUTORIAL.md    # Script development guide
+    └── SCHEDULER_GUIDE.md    # Scheduler user and developer guide
 ```
 
 **Key Components:**
@@ -180,6 +211,7 @@ The application comes with several example scripts:
 - **Global Hotkeys**: Windows API integration for system-wide shortcuts
 - **Script Analysis**: AST parsing for intelligent script execution
 - **Dual Script Support**: Both legacy classes and modern standalone scripts
+- **Scheduler**: QTimer-based interval scheduling with overlap prevention
 
 ## Troubleshooting
 

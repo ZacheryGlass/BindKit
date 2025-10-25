@@ -1,5 +1,203 @@
 # API Reference
 
+## Schedule System
+
+### ScheduleRuntime
+
+Manages scheduled script execution with QTimer-based intervals.
+
+```python
+from core.schedule_runtime import ScheduleRuntime, ScheduleHandle, ScheduleState
+```
+
+#### Signals
+- `schedule_started(str)`: Emitted when schedule begins (script_name)
+- `schedule_stopped(str)`: Emitted when schedule ends (script_name)
+- `schedule_executed(str)`: Emitted on successful execution (script_name)
+- `schedule_error(str, str)`: Emitted on error (script_name, error_message)
+- `schedule_execution_blocked(str)`: Emitted when overlapping execution prevented (script_name)
+
+#### Methods
+
+##### `start_schedule(script_name: str, script_path: Path, interval_seconds: int, execution_callback: Callable, settings_manager=None) -> ScheduleHandle`
+Start a scheduled execution for a script.
+
+**Parameters:**
+- `script_name`: Name of the script (for tracking and identification)
+- `script_path`: Path to the script file (for reference)
+- `interval_seconds`: Interval between executions in seconds (10 to ~2.4M seconds)
+- `execution_callback`: Callable invoked when schedule fires
+- `settings_manager`: Optional SettingsManager for timestamp persistence
+
+**Returns:**
+- `ScheduleHandle` object for the scheduled script
+
+**Raises:**
+- `ValueError`: If interval outside valid range (10s to ~24.8 days)
+- `RuntimeError`: If schedule already exists for this script
+
+**Example:**
+```python
+from core.schedule_runtime import ScheduleRuntime
+from pathlib import Path
+
+schedule_runtime = ScheduleRuntime()
+
+def on_schedule_execute(script_name: str):
+    print(f"Executing {script_name}")
+
+handle = schedule_runtime.start_schedule(
+    script_name="my_script",
+    script_path=Path("scripts/my_script.py"),
+    interval_seconds=3600,  # 1 hour
+    execution_callback=on_schedule_execute
+)
+```
+
+##### `stop_schedule(script_name: str) -> bool`
+Stop a scheduled execution.
+
+**Parameters:**
+- `script_name`: Name of the script to stop
+
+**Returns:**
+- `True` if schedule was stopped, `False` if not found
+
+##### `is_scheduled(script_name: str) -> bool`
+Check if a script has an active schedule.
+
+**Parameters:**
+- `script_name`: Name of the script
+
+**Returns:**
+- `True` if schedule is active, `False` otherwise
+
+##### `get_schedule_handle(script_name: str) -> Optional[ScheduleHandle]`
+Get the schedule handle for a script.
+
+**Parameters:**
+- `script_name`: Name of the script
+
+**Returns:**
+- `ScheduleHandle` if found, `None` otherwise
+
+##### `get_all_schedules() -> Dict[str, ScheduleHandle]`
+Get all active schedules.
+
+**Returns:**
+- Dictionary mapping script names to ScheduleHandle objects
+
+##### `update_interval(script_name: str, new_interval_seconds: int) -> bool`
+Update the interval for a scheduled script.
+
+**Parameters:**
+- `script_name`: Name of the script
+- `new_interval_seconds`: New interval in seconds
+
+**Returns:**
+- `True` if successful, `False` if schedule not found
+
+**Raises:**
+- `ValueError`: If interval outside valid range
+
+##### `stop_all_schedules() -> int`
+Stop all active schedules (typically called on application shutdown).
+
+**Returns:**
+- Number of schedules stopped
+
+##### `get_schedule_status(script_name: str) -> str`
+Get human-readable status of a schedule.
+
+**Parameters:**
+- `script_name`: Name of the script
+
+**Returns:**
+- Status string: "Not scheduled", "Scheduled", "Running", "Stopped", or "Error"
+
+##### `get_schedule_info(script_name: str) -> Optional[Dict[str, Any]]`
+Get detailed information about a schedule.
+
+**Parameters:**
+- `script_name`: Name of the script
+
+**Returns:**
+- Dictionary with schedule info (script_name, interval_seconds, last_run, next_run, is_executing, state) or None
+
+### Data Classes
+
+#### ScheduleState
+Enumeration of schedule states.
+
+```python
+class ScheduleState(Enum):
+    STOPPED = "stopped"
+    SCHEDULED = "scheduled"
+    RUNNING = "running"
+    ERROR = "error"
+```
+
+#### ScheduleHandle
+Tracks a scheduled script execution.
+
+```python
+@dataclass
+class ScheduleHandle:
+    script_name: str              # Name of the script
+    script_path: Path             # Path to script file
+    interval_seconds: int         # Interval between executions
+    timer: QTimer                 # Qt timer object
+    last_run: Optional[float]     # Timestamp of last execution
+    next_run: Optional[float]     # Timestamp of next execution
+    is_executing: bool            # Currently executing flag
+    is_stopping: bool             # Stopping flag (prevents race conditions)
+    state: ScheduleState          # Current schedule state
+    execution_callback: Optional[Callable]  # Callback when scheduled
+```
+
+### ScheduleView
+
+UI component for configuring scheduled script execution.
+
+```python
+from views.schedule_view import ScheduleView
+```
+
+#### Signals
+- `schedule_enabled_changed(str, bool)`: Emitted when enabling/disabling (script_name, enabled)
+- `schedule_interval_changed(str, int)`: Emitted when interval changes (script_name, interval_seconds)
+- `run_now_requested(str)`: Emitted when manual execution requested (script_name)
+
+#### Methods
+
+##### `set_available_scripts(scripts: List[dict])`
+Set the list of available scripts for scheduling.
+
+**Parameters:**
+- `scripts`: List of script info dicts with keys: name, display_name
+
+##### `set_schedule_enabled(enabled: bool)`
+Set the schedule enabled checkbox state.
+
+##### `set_interval(interval_seconds: int)`
+Set the interval display (converts to appropriate unit).
+
+##### `set_last_run(timestamp: Optional[float])`
+Set the last run time display.
+
+##### `set_next_run(timestamp: Optional[float])`
+Set the next run time display.
+
+##### `set_status(status: str)`
+Set the status display.
+
+##### `update_schedule_info(script_name: str, schedule_info: dict)`
+Update schedule information for display.
+
+**Parameters:**
+- `script_name`: Name of the script
+- `schedule_info`: Dictionary with schedule information
+
 ## Global Hotkey System
 
 ### HotkeyManager
