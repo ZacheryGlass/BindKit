@@ -1,6 +1,3 @@
-Here’s a single-file Python watcher that keeps one or more untracked files synced across `dev`, `dev2`, `dev3`, `dev4`. No external deps. Polls, debounces writes, resolves conflicts by “newest wins,” copies atomically, optional backups, multi-file support. Put it anywhere and run.
-
-```python
 #!/usr/bin/env python3
 """
 Sync specified untracked files across 4 parallel working copies in the same repo.
@@ -9,10 +6,10 @@ Usage:
   1) Set config below: GIT_ROOT_PATH, REPO_DIRS, FILES_TO_SYNC.
   2) Run: python sync_untracked.py
 Notes:
-  - “Newest wins” conflict policy (by mtime; deterministic tie-break by repo order).
+  - "Newest wins" conflict policy (by mtime; deterministic tie-break by repo order).
   - Debounce writes with QUIET_PERIOD_SECONDS to avoid syncing half-written files.
   - Atomic replace on target to avoid partial writes.
-  - By default, deletions do NOT propagate (files are “healed” from another copy).
+  - By default, deletions do NOT propagate (files are "healed" from another copy).
 """
 
 import os
@@ -156,7 +153,7 @@ def main() -> None:
             ap = os.path.join(rp, rel)
             fi = stat_file(ap)
             last_seen_mtime[(rel, i)] = fi.mtime_ns if fi.exists else 0
-            # initialize as “old” so first stable source can sync immediately
+            # initialize as "old" so first stable source can sync immediately
             changed_at[(rel, i)] = t0 - (QUIET_PERIOD_SECONDS * 2)
 
     print(f"[info] Syncing across repos: {', '.join(repo_paths)}")
@@ -186,7 +183,7 @@ def main() -> None:
                 if not any(fi.exists for fi in infos):
                     continue
 
-                # If delete propagation is disabled, ignore deletions as “sources”
+                # If delete propagation is disabled, ignore deletions as "sources"
                 # Build list of candidate sources that actually exist
                 src_idx = pick_source(infos)
                 if src_idx is None:
@@ -232,7 +229,7 @@ def main() -> None:
 
                 # Optional: do not propagate deletions unless allowed
                 if not ALLOW_DELETE_PROPAGATION and not infos[src_idx].exists:
-                    # If the “newest” is a deletion, pick the newest existing instead
+                    # If the "newest" is a deletion, pick the newest existing instead
                     existing_idxs = [i for i, fi in enumerate(infos) if fi.exists]
                     if not existing_idxs:
                         continue
@@ -303,4 +300,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-```
