@@ -492,12 +492,8 @@ class MVCApplication:
         self._settings_controller._settings_view = self._settings_view
 
         # Ensure references are cleared when dialog closes
-        def _cleanup_settings(_=None):
-            self._settings_view = None
-            self._settings_controller = None
-
-        self._settings_view.finished.connect(_cleanup_settings)
-        self._settings_view.destroyed.connect(lambda *_: _cleanup_settings())
+        self._settings_view.finished.connect(lambda *_: self._teardown_settings_dialog())
+        self._settings_view.destroyed.connect(lambda *_: self._teardown_settings_dialog())
 
         # Wire controller to view
         # View -> Controller connections
@@ -593,10 +589,53 @@ class MVCApplication:
         finally:
             self.logger.info("Settings dialog closed")
             # Safety cleanup in case finished signal didn't fire
-            self._settings_view = None
-            self._settings_controller = None
-            self._settings_opening = False
-    
+            self._teardown_settings_dialog()
+
+    def _teardown_settings_dialog(self):
+        """Release settings dialog/controller resources to prevent leaks."""
+        controller = self._settings_controller
+        view = self._settings_view
+
+        # Break circular references early so Qt can destroy hierarchies
+        if controller:
+            controller._settings_view = None
+
+            runtime = getattr(controller, '_schedule_runtime', None)
+            if runtime:
+                connections = (
+                    (runtime.schedule_executed, controller.on_schedule_executed),
+                    (runtime.schedule_started, controller.on_schedule_started),
+                    (runtime.schedule_stopped, controller.on_schedule_stopped),
+                )
+                for signal_obj, slot in connections:
+                    try:
+                        signal_obj.disconnect(slot)
+                    except (TypeError, RuntimeError):
+                        pass
+                controller._schedule_runtime = None
+
+        if view:
+            try:
+                view.blockSignals(True)
+            except (TypeError, RuntimeError):
+                pass
+
+        self._settings_view = None
+        self._settings_controller = None
+        self._settings_opening = False
+
+        if controller:
+            try:
+                controller.deleteLater()
+            except (RuntimeError, AttributeError) as e:
+                self.logger.debug(f"Could not delete settings controller: {e}")
+
+        if view:
+            try:
+                view.deleteLater()
+            except (RuntimeError, AttributeError) as e:
+                self.logger.debug(f"Could not delete settings view: {e}")
+
     def _handle_hotkey_config(self, script_name, settings_controller):
         """Handle hotkey configuration dialog"""
         # Get current hotkey for script
