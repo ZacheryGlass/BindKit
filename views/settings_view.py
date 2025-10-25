@@ -530,17 +530,18 @@ class SettingsView(QDialog):
                 pass
             action_btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
-            name_key = script.get('original_display_name', script['display_name'])
-            if script['is_external']:
+            # Use defensive key access to prevent KeyError if display_name is missing
+            name_key = script.get('original_display_name') or script.get('display_name', '')
+            if script.get('is_external', False):
                 # External: Remove script
                 action_btn.setText("Remove")
-                action_btn.setToolTip(f"Remove external script: {script['display_name']}")
+                action_btn.setToolTip(f"Remove external script: {script.get('display_name', 'Unknown')}")
                 action_btn.clicked.connect(
                     lambda checked, s=name_key: self._on_action_clicked(s, is_external=True)
                 )
             else:
                 # Built-in: Toggle disable/enable (determine current state at click time)
-                is_disabled = script['is_disabled']
+                is_disabled = script.get('is_disabled', False)
                 action_btn.setText("Enable" if is_disabled else "Disable")
                 action_btn.setToolTip("Enable this script" if is_disabled else "Disable this script")
                 action_btn.clicked.connect(
