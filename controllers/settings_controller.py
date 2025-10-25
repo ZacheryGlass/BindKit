@@ -659,6 +659,36 @@ class SettingsController(QObject):
             interval_seconds = config.get('interval_seconds', 3600)
             last_run = config.get('last_run')
             next_run = config.get('next_run')
+            config_enabled = config.get('enabled', False)
+
+            # Default runtime values mirror persisted configuration
+            runtime_enabled = config_enabled
+            runtime_status = "Scheduled" if config_enabled else "Disabled"
+
+            # Prefer live runtime data when the executor is available
+            executor = getattr(self._script_execution._script_loader, 'executor', None)
+            if executor:
+                try:
+                    runtime_enabled = executor.is_schedule_running(script_stem)
+                    runtime_status = executor.get_schedule_status(script_stem) or runtime_status
+
+                    handle = executor.schedule_runtime.get_schedule_handle(script_stem)
+                    if handle:
+                        # Prefer in-memory timestamps because settings may lag
+                        if handle.last_run is not None:
+                            last_run = handle.last_run
+                        if handle.next_run is not None:
+                            next_run = handle.next_run
+                except Exception as runtime_error:
+                    logger.debug(f"Could not read runtime schedule state for {script_name}: {runtime_error}")
+
+            # Surface config/runtime mismatches so the UI can reflect the truth
+            if config_enabled and not runtime_enabled:
+                status_display = "Configured (pending start)"
+            elif runtime_enabled:
+                status_display = runtime_status or "Scheduled"
+            else:
+                status_display = runtime_status or "Disabled"
 
             # Format interval for display
             if interval_seconds < 60:
@@ -678,13 +708,15 @@ class SettingsController(QObject):
             next_run_display = "Not scheduled" if not next_run else datetime.fromtimestamp(next_run).strftime("%Y-%m-%d %H:%M:%S")
 
             return {
-                'enabled': config.get('enabled', False),
+                'enabled': runtime_enabled,
+                'configured_enabled': config_enabled,
                 'interval_seconds': interval_seconds,
                 'interval_display': interval_display,
                 'last_run': last_run,
                 'last_run_display': last_run_display,
                 'next_run': next_run,
-                'next_run_display': next_run_display
+                'next_run_display': next_run_display,
+                'status': status_display
             }
 
         except Exception as e:

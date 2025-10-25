@@ -53,7 +53,7 @@ class ScriptAnalyzer:
         display_name = self._get_display_name(script_path)
         
         try:
-            with open(script_path, 'r', encoding='utf-8') as f:
+            with open(script_path, 'r', encoding='utf-8-sig') as f:
                 source_code = f.read()
             
             # Parse the AST
@@ -78,10 +78,16 @@ class ScriptAnalyzer:
 
             # Determine if script is actually executable (has executable code)
             is_executable = has_main_block or has_main_function
+            error_message = None
             if not is_executable:
                 # Check if script has any code beyond imports
                 has_code = self._has_executable_code(tree)
                 is_executable = has_code
+                if not is_executable:
+                    if not source_code.strip():
+                        error_message = "Script is empty"
+                    else:
+                        error_message = "Script has no executable code"
 
             return ScriptInfo(
                 file_path=script_path,
@@ -91,7 +97,8 @@ class ScriptAnalyzer:
                 arguments=arguments,
                 has_main_block=has_main_block,
                 is_executable=is_executable,
-                needs_configuration=needs_configuration
+                needs_configuration=needs_configuration,
+                error=error_message
             )
             
         except Exception as e:
