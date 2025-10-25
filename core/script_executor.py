@@ -659,7 +659,7 @@ class ScriptExecutor:
     def _cleanup_stale_modules(self):
         """Remove modules that haven't been accessed recently."""
         current_time = time.time()
-
+        
         # Run cleanup no more often than the smaller of 5 minutes or the configured TTL
         min_interval = min(300, max(1, self.cache_ttl_seconds))
         if current_time - self._last_cleanup_time < min_interval:

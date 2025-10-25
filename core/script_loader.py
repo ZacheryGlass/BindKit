@@ -48,6 +48,9 @@ class ScriptLoader:
             except Exception as e:
                 logger.error(f"Error discovering external scripts: {e}")
         
+        # Ensure deterministic ordering regardless of async completion order
+        scripts.sort(key=lambda info: info.display_name.lower())
+
         logger.info(f"Script discovery complete: {len(scripts)} total scripts loaded, {len(self.failed_scripts)} failed")
         return scripts
     
