@@ -879,22 +879,45 @@ class SettingsView(QDialog):
 
     # Named action helpers for per-row buttons
     def _on_edit_preset_named(self, preset_name: str):
-        script_name = self.preset_script_combo.currentText()
-        if script_name and preset_name:
+        """Handle edit preset request with validation."""
+        try:
+            script_name = self.preset_script_combo.currentText()
+            if not (script_name and preset_name):
+                logger.warning(f"Edit preset called with invalid data: script='{script_name}', preset='{preset_name}'")
+                return
+
+            # Validate preset still exists
+            if preset_name not in self._preset_data:
+                logger.warning(f"Preset '{preset_name}' not found in preset data")
+                return
+
             self.edit_preset_requested.emit(script_name, preset_name)
+        except Exception as e:
+            logger.error(f"Error handling edit preset request: {e}")
 
     def _on_delete_preset_named(self, preset_name: str):
-        script_name = self.preset_script_combo.currentText()
-        if not (script_name and preset_name):
-            return
-        reply = QMessageBox.question(
-            self,
-            "Delete Preset",
-            f"Delete preset '{preset_name}'?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if reply == QMessageBox.StandardButton.Yes:
-            self.preset_deleted.emit(script_name, preset_name)
+        """Handle delete preset request with validation."""
+        try:
+            script_name = self.preset_script_combo.currentText()
+            if not (script_name and preset_name):
+                logger.warning(f"Delete preset called with invalid data: script='{script_name}', preset='{preset_name}'")
+                return
+
+            # Validate preset still exists
+            if preset_name not in self._preset_data:
+                logger.warning(f"Preset '{preset_name}' not found in preset data")
+                return
+
+            reply = QMessageBox.question(
+                self,
+                "Delete Preset",
+                f"Delete preset '{preset_name}'?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self.preset_deleted.emit(script_name, preset_name)
+        except Exception as e:
+            logger.error(f"Error handling delete preset request: {e}")
     
     def _on_auto_generate_presets(self):
         """Handle auto-generate presets button"""
