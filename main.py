@@ -771,7 +771,6 @@ class MVCApplication:
             if self.hotkey_manager:
                 try:
                     self.hotkey_manager.hotkey_triggered.disconnect()
-                    self.hotkey_manager.registration_failed.disconnect()
                 except (TypeError, RuntimeError, AttributeError) as e:
                     self.logger.debug(f"Hotkey manager signals already disconnected or not connected: {e}")
 
