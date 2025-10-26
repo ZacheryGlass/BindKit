@@ -891,7 +891,12 @@ def main():
     logger.info(f"Working directory: {os.getcwd()}")
     logger.info(f"Command line args: {sys.argv}")
     logger.info("="*60)
-    
+
+    # Set High DPI policy BEFORE creating QApplication
+    QApplication.setHighDpiScaleFactorRoundingPolicy(
+        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+    )
+
     # Create application with single-instance support
     app = None
     app = SingleApplication(sys.argv, 'BindKit-SingleInstance')
@@ -924,11 +929,7 @@ def main():
         QMessageBox.critical(None, "System Tray Not Available",
                            "System tray is required but not available on this system.")
         sys.exit(1)
-    
-    QApplication.setHighDpiScaleFactorRoundingPolicy(
-        Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-    )
-    
+
     app.setStyle("Fusion")
     logger.info(f"Application style set to: Fusion")
     
