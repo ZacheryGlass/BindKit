@@ -11,6 +11,26 @@ from enum import Enum
 
 logger = logging.getLogger('Core.ScriptAnalyzer')
 
+SMART_PUNCTUATION_TRANSLATIONS = {
+    '\u2018': "'",  # left single quote
+    '\u2019': "'",  # right single quote
+    '\u201a': "'",  # single low-9
+    '\u201b': "'",  # single high-reversed-9
+    '\u201c': '"',  # left double quote
+    '\u201d': '"',  # right double quote
+    '\u201e': '"',  # double low-9
+    '\u201f': '"',  # double high-reversed-9
+    '\u00ab': '"',  # left-pointing double angle
+    '\u00bb': '"',  # right-pointing double angle
+    '\u2013': '-',  # en dash
+    '\u2014': '-',  # em dash
+    '\u2015': '-',  # horizontal bar
+    '\u2212': '-',  # minus sign
+    '\u00a0': ' ',  # non-breaking space
+}
+SMART_PUNCTUATION_TABLE = str.maketrans(SMART_PUNCTUATION_TRANSLATIONS)
+SMART_PUNCTUATION_CHARS = set(SMART_PUNCTUATION_TRANSLATIONS.keys())
+
 class ExecutionStrategy(Enum):
     SUBPROCESS = "subprocess"
     FUNCTION_CALL = "function_call"
@@ -55,6 +75,9 @@ class ScriptAnalyzer:
         try:
             with open(script_path, 'r', encoding='utf-8-sig') as f:
                 source_code = f.read()
+            
+            # Normalize any problematic smart punctuation so the parser sees ASCII
+            source_code = self._sanitize_source_text(source_code, script_path)
             
             # Parse the AST
             tree = ast.parse(source_code)
@@ -110,6 +133,20 @@ class ScriptAnalyzer:
                 is_executable=False,
                 error=str(e)
             )
+    
+    def _sanitize_source_text(self, source_code: str, script_path: Path) -> str:
+        """
+        Replace smart quotes, non-breaking spaces, and similar characters with
+        ASCII equivalents so scripts copied from rich-text editors still parse.
+        """
+        if not any(ch in SMART_PUNCTUATION_CHARS for ch in source_code):
+            return source_code
+        
+        normalized = source_code.translate(SMART_PUNCTUATION_TABLE)
+        logger.info(
+            f"Normalized smart punctuation in {script_path.name} to avoid parse errors"
+        )
+        return normalized
     
     def _get_display_name(self, script_path: Path) -> str:
         """Get display name from filename."""

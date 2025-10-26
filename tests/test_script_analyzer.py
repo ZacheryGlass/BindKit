@@ -80,6 +80,24 @@ class TestScriptAnalyzer:
 
         assert script_info is not None
         assert script_info.is_executable
+    
+    def test_analyze_script_with_smart_quotes(self, temp_scripts_dir):
+        """Scripts copied from rich editors with smart quotes should still parse"""
+        content = '''def main():
+    print('hello from smart quotes')
+
+if __name__ == '__main__':
+    main()
+'''
+        smart_content = content.replace("'", "\u2019")
+        script_path = create_test_script(temp_scripts_dir, 'smart_quotes', smart_content)
+
+        analyzer = ScriptAnalyzer()
+        script_info = analyzer.analyze_script(script_path)
+
+        assert script_info is not None
+        assert script_info.is_executable
+        assert script_info.error is None
 
     def test_analyze_service_script(self, sample_script_service):
         """Test detecting service scripts via docstring"""
