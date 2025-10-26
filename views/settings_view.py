@@ -51,6 +51,7 @@ class SettingsView(QDialog):
     custom_name_changed = pyqtSignal(str, str)  # script_name, custom_name
     external_script_add_requested = pyqtSignal(str)  # file_path
     external_script_remove_requested = pyqtSignal(str)  # script_name
+    test_all_hotkeys_requested = pyqtSignal()  # Emitted when user clicks "Test All Hotkeys"
     
     # Preset management
     add_preset_requested = pyqtSignal(str)  # script_name
@@ -194,10 +195,15 @@ class SettingsView(QDialog):
         """Create the Scripts management tab"""
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        
-        # Instructions
+
+        # Instructions with hotkey help information
         instructions = QLabel(
-            "Manage scripts: Enable/disable, set hotkeys, customize names, and add external scripts."
+            "Manage scripts: Enable/disable, set hotkeys, customize names, and add external scripts.\n\n"
+            "Hotkey Tips:\n"
+            "• Click 'Test All Hotkeys' to validate which hotkeys are working\n"
+            "• If a hotkey doesn't work, another application may have already registered it\n"
+            "• Try using Win+Alt combinations (less likely to conflict)\n"
+            "• Close other apps using global hotkeys and restart BindKit if needed"
         )
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
@@ -249,15 +255,20 @@ class SettingsView(QDialog):
         
         # Buttons
         button_layout = QHBoxLayout()
-        
+
         add_external_btn = QPushButton("Add External Script...")
         add_external_btn.clicked.connect(self._on_add_external_script)
         button_layout.addWidget(add_external_btn)
-        
+
+        test_hotkeys_btn = QPushButton("Test All Hotkeys")
+        test_hotkeys_btn.setToolTip("Validate all hotkey registrations and show their status")
+        test_hotkeys_btn.clicked.connect(self.test_all_hotkeys_requested.emit)
+        button_layout.addWidget(test_hotkeys_btn)
+
         button_layout.addStretch()
-        
+
         # Instant-apply: remove explicit Refresh button; view updates via signals
-        
+
         layout.addLayout(button_layout)
         
         self.tab_widget.addTab(tab, "Scripts")
@@ -976,3 +987,66 @@ class SettingsView(QDialog):
                 if self.tab_widget.widget(i) == self.schedule_view:
                     self.tab_widget.setCurrentIndex(i)
                     break
+
+    def show_hotkey_validation_results(self, validation_results: Dict[str, dict]):
+        """
+        Display hotkey validation results to the user.
+
+        Args:
+            validation_results: Dict mapping script_name to status info:
+            {
+                'script_name': {
+                    'hotkey': 'Ctrl+Alt+X',
+                    'registered': True/False,
+                    'error': 'error message if any'
+                }
+            }
+        """
+        if not validation_results:
+            QMessageBox.information(
+                self,
+                "Hotkey Validation",
+                "No hotkeys configured."
+            )
+            return
+
+        # Build result message
+        lines = []
+        failed_count = 0
+        success_count = 0
+
+        for script_name in sorted(validation_results.keys()):
+            info = validation_results[script_name]
+            hotkey = info.get('hotkey', 'N/A')
+            registered = info.get('registered', False)
+            error = info.get('error')
+
+            if registered:
+                lines.append(f"✓ {script_name}: {hotkey}")
+                success_count += 1
+            else:
+                failed_count += 1
+                if error:
+                    lines.append(f"✗ {script_name}: {hotkey}")
+                    lines.append(f"  Error: {error}")
+                else:
+                    lines.append(f"✗ {script_name}: {hotkey} (unknown error)")
+
+        # Create message
+        summary = f"Validation Results: {success_count} OK, {failed_count} Failed\n\n"
+        message = summary + "\n".join(lines)
+
+        if failed_count > 0:
+            message += "\n\n" + (
+                "Tip: If hotkeys failed to register, another application may have already "
+                "registered them. Try:\n"
+                "1. Close other applications that use global hotkeys\n"
+                "2. Restart BindKit\n"
+                "3. Use different key combinations (try Win+Alt combinations)"
+            )
+
+        # Show results
+        if failed_count > 0:
+            QMessageBox.warning(self, "Hotkey Validation Results", message)
+        else:
+            QMessageBox.information(self, "Hotkey Validation Results", message)

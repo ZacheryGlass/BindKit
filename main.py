@@ -173,7 +173,7 @@ class MVCApplication:
     def __init__(self, scripts_directory: str = "scripts"):
         self.scripts_directory = scripts_directory
         self.logger = logging.getLogger('MVC.App')
-        
+
         # MVC Components
         self.app_controller = None
         self.script_controller = None
@@ -187,6 +187,9 @@ class MVCApplication:
         self._settings_controller = None
         self._settings_opening = False
         self._settings_mutex = QMutex()  # Thread-safe access to settings dialog state
+
+        # Track failed hotkey registrations for user notification
+        self._failed_hotkey_registrations = {}  # script_name -> error_message
         
     def initialize(self):
         """Initialize all MVC components and set up connections"""
@@ -234,6 +237,10 @@ class MVCApplication:
     def finalize_startup(self):
         """Complete application startup"""
         self.app_controller.finalize_startup()
+
+        # Show notification about failed hotkeys after startup is complete
+        if self._failed_hotkey_registrations:
+            self._show_hotkey_failures_notification()
     
     def shutdown(self):
         """Shutdown the application gracefully"""
@@ -373,12 +380,15 @@ class MVCApplication:
         try:
             # Create hotkey manager
             self.hotkey_manager = HotkeyManager()
-            
+
             # Connect hotkey triggers to script execution
             self.hotkey_manager.hotkey_triggered.connect(
                 self.script_controller.execute_script_from_hotkey
             )
-            
+
+            # Connect to registration failures to track them for user notification
+            self.hotkey_manager.registration_failed.connect(self._on_hotkey_registration_failed)
+
             # Start hotkey manager
             if not self.hotkey_manager.start():
                 self.logger.warning("Hotkey manager failed to start - hotkeys will not work")
@@ -391,10 +401,10 @@ class MVCApplication:
                 )
             else:
                 self.logger.info("Hotkey management system started")
-                
+
                 # Register current hotkeys
                 self._register_hotkeys()
-                
+
                 # Keep runtime registrations in sync with model changes
                 try:
                     hotkey_model = self.app_controller.get_hotkey_model()
@@ -402,19 +412,68 @@ class MVCApplication:
                     hotkey_model.hotkeys_changed.connect(self._refresh_hotkey_registrations)
                 except Exception as e:
                     self.logger.warning(f"Failed to connect hotkey change sync: {e}")
-            
+
         except Exception as e:
             self.logger.error(f"Error setting up hotkey management: {e}")
     
+    def _on_hotkey_registration_failed(self, script_name: str, hotkey_string: str, error_message: str):
+        """Handle hotkey registration failure"""
+        self._failed_hotkey_registrations[script_name] = error_message
+        self.logger.warning(f"Failed to register hotkey {hotkey_string} for {script_name}: {error_message}")
+
+    def _show_hotkey_failures_notification(self):
+        """Show notification about hotkeys that failed to register"""
+        try:
+            failed_count = len(self._failed_hotkey_registrations)
+            if failed_count == 0:
+                return
+
+            tray_model = self.app_controller.get_tray_model()
+
+            if failed_count == 1:
+                script_name = list(self._failed_hotkey_registrations.keys())[0]
+                title = "Hotkey Registration Failed"
+                message = f"Could not register hotkey for '{script_name}'.\n\nAnother application may have already registered this hotkey. Try restarting BindKit after closing other applications, or use a different key combination."
+            else:
+                title = "Multiple Hotkeys Failed"
+                message = f"{failed_count} hotkey(s) could not be registered.\n\nAnother application may have already registered these hotkeys. Try restarting BindKit after closing other applications, or use different key combinations.\n\nSee Settings for details."
+
+            tray_model.show_notification(
+                title,
+                message,
+                QSystemTrayIcon.MessageIcon.Warning
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error showing hotkey failures notification: {e}")
+
+    def validate_all_hotkeys(self) -> dict:
+        """
+        Validate all registered hotkeys and return their status.
+
+        Returns:
+            Dict mapping script_name to status info:
+            {
+                'script_name': {
+                    'hotkey': 'Ctrl+Alt+X',
+                    'registered': True/False,
+                    'error': 'error message if any'
+                }
+            }
+        """
+        if not self.hotkey_manager:
+            return {}
+        return self.hotkey_manager.validate_registration_status()
+
     def _register_hotkeys(self):
         """Register all configured hotkeys"""
         try:
             hotkey_mappings = self.script_controller.get_all_hotkeys()
-            
+
             for script_name, hotkey in hotkey_mappings.items():
                 self.hotkey_manager.register_hotkey(script_name, hotkey)
                 self.logger.debug(f"Registered hotkey {hotkey} for script {script_name}")
-                
+
         except Exception as e:
             self.logger.error(f"Error registering hotkeys: {e}")
 
@@ -491,6 +550,9 @@ class MVCApplication:
         # Store settings view reference in controller so it can update schedule tab
         self._settings_controller._settings_view = self._settings_view
 
+        # Store mvc_app reference in script controller for hotkey validation
+        self.script_controller._mvc_app = self
+
         # Ensure references are cleared when dialog closes
         self._settings_view.finished.connect(lambda *_: self._teardown_settings_dialog())
         self._settings_view.destroyed.connect(lambda *_: self._teardown_settings_dialog())
@@ -530,6 +592,7 @@ class MVCApplication:
         # Connect schedule view's info request to controller
         self._settings_view.schedule_view.schedule_info_requested.connect(self._settings_controller.on_schedule_info_requested)
         self._settings_view.reset_requested.connect(self._settings_controller.reset_settings)
+        self._settings_view.test_all_hotkeys_requested.connect(self._settings_controller.validate_all_hotkeys)
         # Instant-apply: no accept/save button; models persist on change
         
         # Controller -> View connections

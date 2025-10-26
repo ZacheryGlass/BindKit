@@ -289,7 +289,32 @@ class SettingsController(QObject):
         except Exception as e:
             logger.error(f"Error setting hotkey for {script_name}: {e}")
             self.error_occurred.emit("Hotkey Error", f"Failed to set hotkey: {str(e)}")
-    
+
+    def validate_all_hotkeys(self):
+        """
+        Validate all registered hotkeys and show results in the settings view.
+        Called when user clicks "Test All Hotkeys" button.
+        """
+        try:
+            # Get the MVC app to access the validation method
+            # This is a bit hacky, but the MVC app is the one that has the hotkey manager
+            if self._settings_view and hasattr(self._settings_view, 'parent'):
+                # Try to get the MVC app through the view hierarchy
+                # Actually, we need to get it from somewhere else
+                # Let's just call the script controller to get it
+                if hasattr(self._script_controller, '_mvc_app'):
+                    validation_results = self._script_controller._mvc_app.validate_all_hotkeys()
+                    self._settings_view.show_hotkey_validation_results(validation_results)
+                else:
+                    # Fallback: show error message
+                    self.error_occurred.emit(
+                        "Validation Error",
+                        "Unable to access hotkey validation system."
+                    )
+        except Exception as e:
+            logger.error(f"Error validating hotkeys: {e}")
+            self.error_occurred.emit("Validation Error", f"Failed to validate hotkeys: {str(e)}")
+
     def set_script_custom_name(self, script_name: str, custom_name: str):
         """Set custom display name for a script.
 
