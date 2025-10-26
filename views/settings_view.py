@@ -889,8 +889,8 @@ class SettingsView(QDialog):
                 return
 
             # Validate preset still exists
-            if preset_name not in self._preset_data:
-                logger.warning(f"Preset '{preset_name}' not found in preset data")
+            if script_name not in self._preset_data or preset_name not in self._preset_data[script_name]:
+                logger.warning(f"Preset '{preset_name}' not found in preset data for script '{script_name}'")
                 return
 
             self.edit_preset_requested.emit(script_name, preset_name)
@@ -906,8 +906,8 @@ class SettingsView(QDialog):
                 return
 
             # Validate preset still exists
-            if preset_name not in self._preset_data:
-                logger.warning(f"Preset '{preset_name}' not found in preset data")
+            if script_name not in self._preset_data or preset_name not in self._preset_data[script_name]:
+                logger.warning(f"Preset '{preset_name}' not found in preset data for script '{script_name}'")
                 return
 
             reply = QMessageBox.question(

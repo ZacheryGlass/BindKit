@@ -14,7 +14,7 @@ from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QPushButton,
     QSpinBox, QComboBox, QGroupBox, QMessageBox, QTableWidget,
-    QTableWidgetItem, QHeaderView, QAbstractItemView, QSizePolicy
+    QTableWidgetItem, QHeaderView, QAbstractItemView
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor, QBrush
@@ -103,9 +103,9 @@ class ScheduleView(QWidget):
         table_label.setStyleSheet("font-weight: bold;")
         layout.addWidget(table_label)
 
-        self.schedule_table = QTableWidget(0, 6)
+        self.schedule_table = QTableWidget(0, 5)
         self.schedule_table.setHorizontalHeaderLabels([
-            "Script", "Schedule", "Interval", "Last run", "Next run", "Actions"
+            "Script", "Schedule", "Interval", "Last run", "Next run"
         ])
         self.schedule_table.verticalHeader().setVisible(False)
         self.schedule_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -117,7 +117,7 @@ class ScheduleView(QWidget):
         header = self.schedule_table.horizontalHeader()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        for column in range(1, 6):
+        for column in range(1, 5):
             header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
 
         layout.addWidget(self.schedule_table)
@@ -185,12 +185,6 @@ class ScheduleView(QWidget):
             item = self._create_table_item("-", alignment)
             self.schedule_table.setItem(row, column, item)
 
-        action_btn = QPushButton("Run")
-        action_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        action_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        action_btn.clicked.connect(lambda checked=False, s=script_name: self._on_row_run_clicked(s))
-        self.schedule_table.setCellWidget(row, 5, action_btn)
-
     def _create_table_item(self, text: str, alignment: Qt.AlignmentFlag) -> QTableWidgetItem:
         """Create a table item with the specified text and alignment."""
         item = QTableWidgetItem(text)
@@ -220,9 +214,12 @@ class ScheduleView(QWidget):
         schedule_item.setForeground(QBrush(QColor('#1f7a4a' if enabled else '#6e6f78')))
 
         interval_item = self._ensure_table_item(row, 2, Qt.AlignmentFlag.AlignCenter)
-        interval_item.setText(
-            data.get('interval_display') or self._format_interval_display(data.get('interval_seconds'))
-        )
+        if enabled:
+            interval_item.setText(
+                data.get('interval_display') or self._format_interval_display(data.get('interval_seconds'))
+            )
+        else:
+            interval_item.setText('-')
 
         last_run_item = self._ensure_table_item(row, 3, Qt.AlignmentFlag.AlignLeft)
         if data.get('last_run'):
@@ -260,16 +257,6 @@ class ScheduleView(QWidget):
     def _get_display_name(self, script_name: str) -> str:
         """Get display name for a script."""
         return self._display_name_map.get(script_name, script_name)
-
-    def _on_row_run_clicked(self, script_name: str):
-        """Handle Run button click in table row."""
-        if not script_name:
-            return
-        row = self._row_lookup.get(script_name)
-        if row is not None:
-            self.schedule_table.setCurrentCell(row, 0)
-            self.schedule_table.selectRow(row)
-        self.run_now_requested.emit(script_name)
 
     def set_schedule_enabled(self, enabled: bool):
         """Set the schedule enabled checkbox state."""
