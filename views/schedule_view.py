@@ -113,6 +113,7 @@ class ScheduleView(QWidget):
         self.schedule_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.schedule_table.setAlternatingRowColors(True)
         self.schedule_table.itemSelectionChanged.connect(self._on_table_selection_changed)
+        self.schedule_table.cellClicked.connect(self._on_table_cell_clicked)
 
         header = self.schedule_table.horizontalHeader()
         header.setStretchLastSection(False)
@@ -212,6 +213,7 @@ class ScheduleView(QWidget):
         enabled = data.get('enabled', False)
         schedule_item.setText('On' if enabled else 'Off')
         schedule_item.setForeground(QBrush(QColor('#1f7a4a' if enabled else '#6e6f78')))
+        schedule_item.setToolTip('Click to toggle schedule on/off')
 
         interval_item = self._ensure_table_item(row, 2, Qt.AlignmentFlag.AlignCenter)
         if enabled:
@@ -307,6 +309,30 @@ class ScheduleView(QWidget):
             return value * 86400
         else:
             return 3600  # Default 1 hour
+
+    def _on_table_cell_clicked(self, row: int, column: int):
+        """Handle table cell click."""
+        # Column 1 is the Schedule column (On/Off)
+        if column == 1:
+            # Get script name from the first column
+            script_item = self.schedule_table.item(row, 0)
+            if not script_item:
+                return
+            script_name = script_item.data(Qt.ItemDataRole.UserRole)
+            if not script_name:
+                return
+
+            # Toggle the schedule state
+            current_state = self._schedule_data.get(script_name, {}).get('enabled', False)
+            new_state = not current_state
+            logger.debug(f"Toggling schedule for {script_name}: {current_state} -> {new_state}")
+
+            # Update checkbox immediately if this script is selected
+            if script_name == self.selected_script:
+                self.set_schedule_enabled(new_state)
+
+            # Emit signal for controller to persist the change
+            self.schedule_enabled_changed.emit(script_name, new_state)
 
     def _on_table_selection_changed(self):
         """Handle table row selection."""
