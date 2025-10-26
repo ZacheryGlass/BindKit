@@ -273,7 +273,7 @@ class AppController(QObject):
                 logger.warning("ScriptController not available for shutdown")
                 return
 
-            executor = self._script_execution._executor
+            executor = self._script_execution._script_loader.executor
             if not executor:
                 logger.warning("ScriptExecutor not available")
                 return
