@@ -182,6 +182,8 @@ class MVCApplication:
         self.tray_view = None
         self.hotkey_manager = None
         self.memory_monitor = None
+        # Models
+        self._script_execution = None
         # Singleton settings dialog/controller
         self._settings_view = None
         self._settings_controller = None
@@ -294,28 +296,31 @@ class MVCApplication:
     def _create_controllers(self):
         """Create all controller instances"""
         self.logger.debug("Creating controllers...")
-        
+
         # Get models from app controller
         script_collection = self.app_controller.get_script_collection_model()
         script_execution = self.app_controller.get_script_execution_model()
         hotkey_model = self.app_controller.get_hotkey_model()
         tray_model = self.app_controller.get_tray_model()
         notification_model = self.app_controller.get_notification_model()
-        
+
+        # Store script execution model for later access
+        self._script_execution = script_execution
+
         # Create script controller
         self.script_controller = ScriptController(
             script_collection, script_execution, hotkey_model
         )
-        
+
         # Create tray controller
         self.tray_controller = TrayController(
             tray_model, notification_model, self.script_controller
         )
-        
+
         # Register controllers with app controller
         self.app_controller.set_script_controller(self.script_controller)
         self.app_controller.set_tray_controller(self.tray_controller)
-        
+
         self.logger.debug("Controllers created")
     
     def _create_views(self):
