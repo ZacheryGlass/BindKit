@@ -166,7 +166,10 @@ class HotkeyManager(QObject):
     def _describe_winapi_result(api_name: str, result: Optional[int]) -> str:
         """Return a friendly description for logging."""
         if result is None:
-            return f"{api_name} returned None (expected for pywin32 success)"
+            return (
+                f"{api_name} returned None "
+                "(pywin32 uses None to signal success for BOOL-returning APIs)"
+            )
         return f"{api_name} returned {result}"
     
     def start(self):
@@ -429,10 +432,11 @@ class HotkeyManager(QObject):
                 self.registration_failed.emit(script_name, normalized, error_msg)
                 return False
 
-            # Validate that we got a valid success code (pywin32 returns None on success)
-            logger.debug(f"{self._describe_winapi_result('RegisterHotKey', result)} for hotkey {normalized}")
-            
-            # Registration successful
+            # Registration successful - record the friendly result for debugging clarity
+            result_description = self._describe_winapi_result('RegisterHotKey', result)
+            logger.debug(
+                f"RegisterHotKey succeeded for hotkey {normalized} ({result_description})"
+            )
             self.hotkeys[hotkey_id] = (script_name, normalized)
             self.registered_combos.add(normalized)
             logger.info(f"Registered hotkey {normalized} for script {script_name} (ID: {hotkey_id})")
