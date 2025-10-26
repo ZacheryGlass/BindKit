@@ -266,7 +266,7 @@ class SettingsController(QObject):
     def set_script_hotkey(self, script_name: str, hotkey: str):
         """Set hotkey for a script"""
         logger.info(f"Setting hotkey for {script_name}: {hotkey}")
-        
+
         try:
             if hotkey:
                 # Check if hotkey is available
@@ -277,15 +277,20 @@ class SettingsController(QObject):
                         f"Hotkey {hotkey} is already assigned to {existing_script}"
                     )
                     return
-                
+
                 self._script_controller.set_script_hotkey(script_name, hotkey)
+
+                # Auto-validate hotkey registration after setting
+                # Give Windows a moment to register the hotkey before validating
+                from PyQt6.QtCore import QTimer
+                QTimer.singleShot(500, self.validate_all_hotkeys)
             else:
-                # Remove hotkey
+                # Remove hotkey (don't auto-validate on clear)
                 self._script_controller.remove_script_hotkey(script_name)
-            
+
             # Notify views; granular update handled by settings view
             self.hotkey_updated.emit(script_name, hotkey)
-            
+
         except Exception as e:
             logger.error(f"Error setting hotkey for {script_name}: {e}")
             self.error_occurred.emit("Hotkey Error", f"Failed to set hotkey: {str(e)}")

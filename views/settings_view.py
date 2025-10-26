@@ -196,14 +196,9 @@ class SettingsView(QDialog):
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
-        # Instructions with hotkey help information
+        # Instructions
         instructions = QLabel(
-            "Manage scripts: Enable/disable, set hotkeys, customize names, and add external scripts.\n\n"
-            "Hotkey Tips:\n"
-            "• Click 'Test All Hotkeys' to validate which hotkeys are working\n"
-            "• If a hotkey doesn't work, another application may have already registered it\n"
-            "• Try using Win+Alt combinations (less likely to conflict)\n"
-            "• Close other apps using global hotkeys and restart BindKit if needed"
+            "Manage scripts: Enable/disable, set hotkeys, customize names, and add external scripts."
         )
         instructions.setWordWrap(True)
         layout.addWidget(instructions)
@@ -260,10 +255,10 @@ class SettingsView(QDialog):
         add_external_btn.clicked.connect(self._on_add_external_script)
         button_layout.addWidget(add_external_btn)
 
-        test_hotkeys_btn = QPushButton("Test All Hotkeys")
-        test_hotkeys_btn.setToolTip("Validate all hotkey registrations and show their status")
-        test_hotkeys_btn.clicked.connect(self.test_all_hotkeys_requested.emit)
-        button_layout.addWidget(test_hotkeys_btn)
+        validate_hotkeys_btn = QPushButton("Validate Hotkeys")
+        validate_hotkeys_btn.setToolTip("Check which hotkeys are successfully registered")
+        validate_hotkeys_btn.clicked.connect(self.test_all_hotkeys_requested.emit)
+        button_layout.addWidget(validate_hotkeys_btn)
 
         button_layout.addStretch()
 
