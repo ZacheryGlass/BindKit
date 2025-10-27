@@ -14,6 +14,10 @@ class SettingsManager(QObject):
             'start_minimized': True,
             'show_notification': True
         },
+        'appearance': {
+            'theme': 'Slate',
+            'follow_system': False
+        },
         'window': {
             'geometry': None,
             'last_position': None

@@ -66,6 +66,10 @@ class SettingsView(QDialog):
 
     # Reset operations
     reset_requested = pyqtSignal(str)  # category
+
+    # Appearance
+    theme_changed = pyqtSignal(str)
+    follow_system_theme_changed = pyqtSignal(bool)
     
     # Dialog actions (instant-apply mode: no OK/Cancel buttons)
     
@@ -89,6 +93,10 @@ class SettingsView(QDialog):
         
         # Spinboxes for numeric settings
         self.timeout_spinbox = None
+
+        # Appearance controls
+        self.theme_combo = None
+        self.follow_system_checkbox = None
         
         # Track current data
         self._script_data = []
@@ -118,6 +126,7 @@ class SettingsView(QDialog):
         self._create_scripts_tab()
         self._create_schedule_tab()
         self._create_presets_tab()
+        self._create_appearance_tab()
         self._create_reset_tab()
         
         # Instant-apply: remove OK/Cancel; window can be closed via title bar
@@ -190,6 +199,35 @@ class SettingsView(QDialog):
         layout.addStretch()
         
         self.tab_widget.addTab(tab, "General")
+
+    def _create_appearance_tab(self):
+        """Create the Appearance settings tab (themes)."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        theme_group = QGroupBox("Theme")
+        theme_layout = QVBoxLayout()
+
+        # Follow system option
+        self.follow_system_checkbox = QCheckBox("Follow system theme (Windows)")
+        self.follow_system_checkbox.toggled.connect(self.follow_system_theme_changed.emit)
+        theme_layout.addWidget(self.follow_system_checkbox)
+
+        # Theme selection
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Color theme:"))
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["Onyx", "Quartz", "Slate", "Jade", "Sapphire"])  # keep in sync with resources/themes
+        self.theme_combo.currentTextChanged.connect(self.theme_changed.emit)
+        row.addWidget(self.theme_combo)
+        row.addStretch()
+        theme_layout.addLayout(row)
+
+        theme_group.setLayout(theme_layout)
+        layout.addWidget(theme_group)
+
+        layout.addStretch()
+        self.tab_widget.addTab(tab, "Appearance")
     
     def _create_scripts_tab(self):
         """Create the Scripts management tab"""
@@ -435,6 +473,16 @@ class SettingsView(QDialog):
     def update_execution_settings(self, settings: Dict[str, Any]):
         """Update execution settings display"""
         self.timeout_spinbox.setValue(settings.get('script_timeout_seconds', 30))
+
+    def update_appearance_settings(self, settings: Dict[str, Any]):
+        """Update appearance settings display."""
+        if self.theme_combo:
+            theme = settings.get('theme', 'Slate')
+            idx = self.theme_combo.findText(theme)
+            if idx >= 0:
+                self.theme_combo.setCurrentIndex(idx)
+        if self.follow_system_checkbox:
+            self.follow_system_checkbox.setChecked(bool(settings.get('follow_system', False)))
     
     def update_script_list(self, scripts: List[Dict[str, Any]]):
         """Update the scripts table"""

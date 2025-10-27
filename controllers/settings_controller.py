@@ -35,6 +35,7 @@ class SettingsController(QObject):
     settings_saved = pyqtSignal()
     settings_reset = pyqtSignal(str)  # category that was reset
     error_occurred = pyqtSignal(str, str)  # title, message
+    appearance_settings_updated = pyqtSignal(dict)
     
     def __init__(self, app_model, script_controller, parent=None):
         super().__init__(parent)
@@ -69,7 +70,11 @@ class SettingsController(QObject):
                 'execution': self._app_model.get_execution_settings(),
                 'scripts': self._load_script_configurations(),
                 'hotkeys': self._hotkey_model.get_all_hotkeys(),
-                'presets': self._load_all_presets()
+                'presets': self._load_all_presets(),
+                'appearance': {
+                    'theme': self._settings_manager.get('appearance/theme', 'Slate'),
+                    'follow_system': bool(self._settings_manager.get('appearance/follow_system', False))
+                }
             }
 
             self._current_settings = settings_data
@@ -80,6 +85,7 @@ class SettingsController(QObject):
             self.behavior_settings_updated.emit(settings_data['behavior'])
             self.execution_settings_updated.emit(settings_data['execution'])
             self._emit_script_list_update(settings_data['scripts'])
+            self.appearance_settings_updated.emit(settings_data['appearance'])
 
             logger.info("Settings loaded successfully")
 
@@ -357,7 +363,35 @@ class SettingsController(QObject):
                     "Invalid File",
                     "Please select a valid Python (.py) file"
                 )
-                return False
+        return False
+
+    # Appearance settings methods
+    def set_theme(self, theme_name: str):
+        """Set the preferred theme name and persist."""
+        try:
+            theme_name = (theme_name or '').strip()
+            if not theme_name:
+                theme_name = 'Slate'
+            self._settings_manager.set('appearance/theme', theme_name)
+            self.appearance_settings_updated.emit({
+                'theme': theme_name,
+                'follow_system': bool(self._settings_manager.get('appearance/follow_system', False))
+            })
+        except Exception as e:
+            logger.error(f"Error setting theme: {e}")
+            self.error_occurred.emit("Appearance Error", f"Failed to set theme: {str(e)}")
+
+    def set_follow_system_theme(self, enabled: bool):
+        """Enable/disable following system theme and persist."""
+        try:
+            self._settings_manager.set('appearance/follow_system', bool(enabled))
+            self.appearance_settings_updated.emit({
+                'theme': self._settings_manager.get('appearance/theme', 'Slate'),
+                'follow_system': bool(enabled)
+            })
+        except Exception as e:
+            logger.error(f"Error setting follow system theme: {e}")
+            self.error_occurred.emit("Appearance Error", f"Failed to update appearance: {str(e)}")
             
             # Generate script name from file
             script_name = path.stem.replace('_', ' ').title()

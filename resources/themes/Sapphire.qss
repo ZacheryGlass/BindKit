@@ -1,0 +1,35 @@
+/* Sapphire (Blue) - accessible dark blue-accent theme */
+/* bg: #0C1020, surface: #121733, hover: #1A224A, border: #243060 */
+/* text: #E6ECFF, text-muted: #AAB4D6, accent: #4C8DFF, danger: #FF6B6B */
+
+QWidget { background-color: #0C1020; color: #E6ECFF; }
+
+QMenu, QDialog, QFrame, QTabWidget::pane { background-color: #121733; border: 1px solid #243060; }
+QMenu::item { padding: 6px 14px; }
+QMenu::item:selected { background-color: #1A224A; }
+
+QTabBar::tab {
+    background: #121733;
+    color: #E6ECFF;
+    padding: 6px 12px;
+    border: 1px solid #243060;
+    border-bottom: none;
+}
+QTabBar::tab:selected { background: #1A224A; }
+
+QPushButton { background-color: #1A224A; color: #E6ECFF; padding: 6px 12px; border: 1px solid #243060; border-radius: 4px; }
+QPushButton:hover { background-color: #1E2858; }
+QPushButton:pressed { background-color: #233067; }
+QPushButton:disabled { color: #8792B8; border-color: #1A224A; }
+
+QLineEdit, QSpinBox, QComboBox, QTableWidget, QTableView, QListWidget, QTextEdit {
+    background-color: #0F1430; color: #E6ECFF; border: 1px solid #243060;
+    selection-background-color: #4C8DFF; selection-color: #0A0F24;
+}
+
+QHeaderView::section { background: #121733; color: #E6ECFF; border: 1px solid #243060; }
+QToolTip { background-color: #121733; color: #E6ECFF; border: 1px solid #243060; }
+
+QLabel { link-color: #4C8DFF; }
+QPushButton[flat="true"] { color: #4C8DFF; border: none; background: transparent; }
+

@@ -1,0 +1,63 @@
+/* Quartz (Light) - high-contrast light theme */
+/* bg: #FFFFFF, surface: #F4F6F8, hover: #E9EEF2, border: #D0D7DE */
+/* text: #111827, text-muted: #6B7280, accent: #0A84FF, danger: #C62828 */
+
+QWidget {
+    background-color: #FFFFFF;
+    color: #111827;
+}
+
+QMenu, QDialog, QFrame, QTabWidget::pane {
+    background-color: #F4F6F8;
+    border: 1px solid #D0D7DE;
+}
+
+QMenu::item {
+    padding: 6px 14px;
+}
+QMenu::item:selected { background-color: #E9EEF2; }
+
+QTabBar::tab {
+    background: #F4F6F8;
+    color: #111827;
+    padding: 6px 12px;
+    border: 1px solid #D0D7DE;
+    border-bottom: none;
+}
+QTabBar::tab:selected { background: #E9EEF2; }
+
+QPushButton {
+    background-color: #E9EEF2;
+    color: #111827;
+    padding: 6px 12px;
+    border: 1px solid #D0D7DE;
+    border-radius: 4px;
+}
+QPushButton:hover { background-color: #DFE6EC; }
+QPushButton:pressed { background-color: #D5DEE6; }
+QPushButton:disabled { color: #9AA3AE; border-color: #E0E6EB; }
+
+QLineEdit, QSpinBox, QComboBox, QTableWidget, QTableView, QListWidget, QTextEdit {
+    background-color: #FFFFFF;
+    color: #111827;
+    border: 1px solid #D0D7DE;
+    selection-background-color: #0A84FF;
+    selection-color: #FFFFFF;
+}
+
+QHeaderView::section {
+    background: #F4F6F8;
+    color: #111827;
+    border: 1px solid #D0D7DE;
+}
+
+QToolTip {
+    background-color: #F4F6F8;
+    color: #111827;
+    border: 1px solid #D0D7DE;
+}
+
+/* Links / accents */
+QLabel { link-color: #0A84FF; }
+QPushButton[flat="true"] { color: #0A84FF; border: none; background: transparent; }
+

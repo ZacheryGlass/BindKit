@@ -27,6 +27,7 @@ from views.hotkey_config_view import HotkeyConfigView
 from views.preset_editor_view import PresetEditorView
 from core.hotkey_manager import HotkeyManager
 from core.memory_monitor import get_memory_monitor
+from core.theme_manager import ThemeManager
 
 
 def setup_logging():
@@ -598,6 +599,9 @@ class MVCApplication:
         self._settings_view.schedule_view.schedule_info_requested.connect(self._settings_controller.on_schedule_info_requested)
         self._settings_view.reset_requested.connect(self._settings_controller.reset_settings)
         self._settings_view.test_all_hotkeys_requested.connect(self._settings_controller.validate_all_hotkeys)
+        # Appearance
+        self._settings_view.theme_changed.connect(self._settings_controller.set_theme)
+        self._settings_view.follow_system_theme_changed.connect(self._settings_controller.set_follow_system_theme)
         # Instant-apply: no accept/save button; models persist on change
         
         # Controller -> View connections
@@ -615,6 +619,7 @@ class MVCApplication:
         # Update hotkeys incrementally for better UX
         self._settings_controller.hotkey_updated.connect(lambda s, h: self._settings_view.update_script_hotkey(s, h))
         self._settings_controller.preset_updated.connect(self._settings_view.update_preset_list)
+        self._settings_controller.appearance_settings_updated.connect(self._settings_view.update_appearance_settings)
         # When presets change, refresh tray menu so preset submenus reflect changes
         try:
             self._settings_controller.preset_updated.connect(lambda *_: self.tray_controller.update_menu())
@@ -932,18 +937,38 @@ def main():
 
     app.setStyle("Fusion")
     logger.info(f"Application style set to: Fusion")
-    
-    # Load and apply custom stylesheet
+
+    # Theme handling: load and apply from settings with safe fallback
+    theme_manager = ThemeManager()
     try:
-        style_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'style.qss')
-        if os.path.exists(style_path):
-            with open(style_path, 'r', encoding='utf-8') as f:
-                app.setStyleSheet(f.read())
-            logger.info(f"Applied custom stylesheet: {style_path}")
-        else:
-            logger.warning(f"Custom stylesheet not found: {style_path}")
+        from core.settings import SettingsManager
+        theme_settings = SettingsManager()
+
+        def _apply_theme_from_settings():
+            try:
+                preferred = theme_settings.get('appearance/theme', ThemeManager.DEFAULT_THEME_NAME)
+                follow = bool(theme_settings.get('appearance/follow_system', False))
+                effective = theme_manager.resolve_effective_theme(preferred, follow)
+                theme_manager.apply_theme(effective)
+                logger.info(f"Theme applied (preferred={preferred}, follow_system={follow}, effective={effective})")
+            except Exception as e_inner:
+                logger.error(f"Theme application failed: {e_inner}")
+
+        # Apply at startup
+        _apply_theme_from_settings()
+
+        # React to settings changes for instant-apply
+        def _on_setting_changed(key: str, value):
+            if key.startswith('appearance/'):
+                _apply_theme_from_settings()
+
+        try:
+            theme_settings.settings_changed.connect(_on_setting_changed)
+        except Exception as conn_err:
+            logger.debug(f"Could not connect theme change handler: {conn_err}")
+
     except Exception as e:
-        logger.error(f"Failed to load custom stylesheet: {e}")
+        logger.error(f"Failed to initialize theme system: {e}")
     
     # Don't quit when last window closes (we have tray icon)
     app.setQuitOnLastWindowClosed(False)
