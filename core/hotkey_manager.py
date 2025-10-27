@@ -8,6 +8,9 @@ import win32gui
 
 logger = logging.getLogger('Core.HotkeyManager')
 
+# Special system hotkey identifiers (reserved names)
+SYSTEM_SHOW_MENU = "__system_show_menu__"
+
 # Windows modifier key constants
 MOD_ALT = 0x0001
 MOD_CONTROL = 0x0002

@@ -33,6 +33,9 @@ class SettingsManager(QObject):
         'execution': {
             'script_timeout_seconds': 30
         },
+        'system_hotkeys': {
+            'show_menu': 'Alt+Space'
+        },
         'hotkeys': {
             # Hotkey mappings will be stored as 'hotkeys/ScriptName': 'Ctrl+Alt+X'
             # This is just a placeholder for the schema
@@ -827,3 +830,13 @@ class SettingsManager(QObject):
             logger.info(f"Removed schedule config for '{script_name}'")
         finally:
             self.settings.endGroup()
+
+    # System hotkeys methods
+    def get_show_menu_hotkey(self) -> str:
+        """Get the hotkey for showing the tray menu."""
+        return self.get('system_hotkeys/show_menu', 'Alt+Space')
+
+    def set_show_menu_hotkey(self, hotkey: str) -> None:
+        """Set the hotkey for showing the tray menu."""
+        self.set('system_hotkeys/show_menu', hotkey)
+        logger.info(f"Show menu hotkey set to: {hotkey}")
