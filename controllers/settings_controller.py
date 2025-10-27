@@ -252,7 +252,12 @@ class SettingsController(QObject):
         """Set script notification preference"""
         logger.info(f"Setting show script notifications: {enabled}")
         self._app_model.set_show_script_notifications(enabled)
-    
+
+    def set_check_for_updates(self, enabled: bool):
+        """Set automatic update check preference"""
+        logger.info(f"Setting check for updates: {enabled}")
+        self._app_model.set_check_for_updates(enabled)
+
     # Execution settings methods
     def set_script_timeout(self, seconds: int):
         """Set script execution timeout"""

@@ -122,7 +122,8 @@ class ApplicationStateModel(QObject):
             'minimize_to_tray': self._settings.get('behavior/minimize_to_tray', True),
             'close_to_tray': self._settings.get('behavior/close_to_tray', True),
             'single_instance': self._settings.get('behavior/single_instance', True),
-            'show_script_notifications': self._settings.get('behavior/show_script_notifications', True)
+            'show_script_notifications': self._settings.get('behavior/show_script_notifications', True),
+            'check_for_updates': self._settings.get('behavior/check_for_updates', True)
         }
     
     def set_minimize_to_tray(self, enabled: bool):
@@ -156,7 +157,15 @@ class ApplicationStateModel(QObject):
     def should_show_script_notifications(self) -> bool:
         """Check if script notifications should be shown"""
         return self._settings.get('behavior/show_script_notifications', True)
-    
+
+    def set_check_for_updates(self, enabled: bool):
+        """Set whether to automatically check for updates"""
+        self._settings.set('behavior/check_for_updates', enabled)
+
+    def should_check_for_updates(self) -> bool:
+        """Check if automatic update checking is enabled"""
+        return self._settings.get('behavior/check_for_updates', True)
+
     # Execution settings
     def get_execution_settings(self) -> dict:
         """Get all execution-related settings"""

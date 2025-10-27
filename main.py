@@ -535,6 +535,14 @@ class MVCApplication:
         """Handle settings dialog request"""
         self.logger.info("Settings dialog requested")
 
+        # Check for updates when settings dialog is opened
+        try:
+            update_controller = self.app_controller.get_update_controller()
+            if update_controller:
+                update_controller.check_for_updates(show_dialog_if_available=True)
+        except Exception as e:
+            self.logger.debug(f"Update check failed: {e}")
+
         # Use mutex to ensure thread-safe access to settings dialog state
         self._settings_mutex.lock()
 
@@ -594,6 +602,7 @@ class MVCApplication:
         self._settings_view.close_to_tray_changed.connect(self._settings_controller.set_close_to_tray)
         self._settings_view.single_instance_changed.connect(self._settings_controller.set_single_instance)
         self._settings_view.show_script_notifications_changed.connect(self._settings_controller.set_show_script_notifications)
+        self._settings_view.check_for_updates_changed.connect(self._settings_controller.set_check_for_updates)
         self._settings_view.script_timeout_changed.connect(self._settings_controller.set_script_timeout)
         self._settings_view.show_menu_hotkey_config_requested.connect(lambda: self._handle_show_menu_hotkey_config(self._settings_controller))
         self._settings_view.script_toggled.connect(self._settings_controller.toggle_script)

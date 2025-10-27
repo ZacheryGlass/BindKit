@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import QApplication
 from models.application_model import ApplicationStateModel
 from models.script_models import ScriptCollectionModel, ScriptExecutionModel, HotkeyModel
 from models.system_models import TrayIconModel, NotificationModel, WindowStateModel
+from controllers.update_controller import UpdateController
 
 logger = logging.getLogger('Controllers.App')
 
@@ -48,33 +49,37 @@ class AppController(QObject):
         self._script_controller = None
         self._settings_controller = None
         self._tray_controller = None
-        
+        self._update_controller = None
+
         # Connect model signals for coordination
         self._setup_model_coordination()
-        
+
         logger.info("AppController initialized")
     
     def initialize_application(self):
         """Initialize the application and all subsystems"""
         logger.info("Initializing application...")
-        
+
         try:
             # Start application model
             self._app_model.start_application()
-            
+
             # Initialize tray icon
             self._tray_model.show_icon()
-            
+
             # Discover scripts
             self._script_collection.discover_scripts()
-            
+
             # Set up tray system availability
             from PyQt6.QtWidgets import QSystemTrayIcon
             self._tray_model.set_supports_notifications(QSystemTrayIcon.supportsMessages())
-            
+
+            # Initialize update controller
+            self._initialize_update_controller()
+
             self.application_initialized.emit()
             logger.info("Application initialization complete")
-            
+
         except Exception as e:
             logger.error(f"Error during application initialization: {e}")
             raise
@@ -90,6 +95,10 @@ class AppController(QObject):
             # Show startup notification if appropriate
             if self._app_model.is_start_minimized():
                 self._notification_model.show_startup_notification()
+
+            # Check for updates on startup (if enabled)
+            if self._update_controller:
+                self._update_controller.check_for_updates(show_dialog_if_available=True)
 
             self.application_ready.emit()
             logger.info("Application startup complete")
@@ -157,7 +166,20 @@ class AppController(QObject):
     def get_window_model(self) -> WindowStateModel:
         """Get the window state model"""
         return self._window_model
-    
+
+    def get_update_controller(self) -> Optional[UpdateController]:
+        """Get the update controller"""
+        return self._update_controller
+
+    def _initialize_update_controller(self):
+        """Initialize the update controller"""
+        try:
+            self._update_controller = UpdateController(self)
+            logger.info("Update controller initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize update controller: {e}")
+            self._update_controller = None
+
     def _setup_model_coordination(self):
         """Set up signal connections between models for coordination"""
         logger.debug("Setting up model coordination...")

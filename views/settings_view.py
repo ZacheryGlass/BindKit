@@ -35,12 +35,13 @@ class SettingsView(QDialog):
     run_on_startup_changed = pyqtSignal(bool)
     start_minimized_changed = pyqtSignal(bool)
     show_startup_notification_changed = pyqtSignal(bool)
-    
+
     # Behavior settings
     minimize_to_tray_changed = pyqtSignal(bool)
     close_to_tray_changed = pyqtSignal(bool)
     single_instance_changed = pyqtSignal(bool)
     show_script_notifications_changed = pyqtSignal(bool)
+    check_for_updates_changed = pyqtSignal(bool)
     
     # Execution settings
     script_timeout_changed = pyqtSignal(int)
@@ -95,6 +96,7 @@ class SettingsView(QDialog):
         self.close_to_tray_checkbox = None
         self.single_instance_checkbox = None
         self.show_script_notifications_checkbox = None
+        self.check_for_updates_checkbox = None
         
         # Spinboxes for numeric settings
         self.timeout_spinbox = None
@@ -161,7 +163,11 @@ class SettingsView(QDialog):
         self.show_notification_checkbox = QCheckBox("Show notification on startup")
         self.show_notification_checkbox.toggled.connect(self.show_startup_notification_changed.emit)
         startup_layout.addWidget(self.show_notification_checkbox)
-        
+
+        self.check_for_updates_checkbox = QCheckBox("Check for updates automatically")
+        self.check_for_updates_checkbox.toggled.connect(self.check_for_updates_changed.emit)
+        startup_layout.addWidget(self.check_for_updates_checkbox)
+
         startup_group.setLayout(startup_layout)
         layout.addWidget(startup_group)
         
@@ -524,6 +530,7 @@ class SettingsView(QDialog):
         self.show_script_notifications_checkbox.setChecked(
             settings.get('show_script_notifications', True)
         )
+        self.check_for_updates_checkbox.setChecked(settings.get('check_for_updates', True))
     
     def update_execution_settings(self, settings: Dict[str, Any]):
         """Update execution settings display"""
