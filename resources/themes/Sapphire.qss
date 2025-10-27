@@ -61,5 +61,5 @@ QTableWidget, QTableView, QListWidget, QListView, QTreeWidget, QTreeView {
 QHeaderView::section { background: #121733; color: #E6ECFF; border: 1px solid #243060; }
 QToolTip { background-color: #121733; color: #E6ECFF; border: 1px solid #243060; }
 
-QLabel { link-color: #4C8DFF; }
+QLabel a { color: #4C8DFF; }
 QPushButton[flat="true"] { color: #4C8DFF; border: none; background: transparent; }

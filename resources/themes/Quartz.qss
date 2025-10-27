@@ -86,5 +86,5 @@ QToolTip {
 }
 
 /* Links / accents */
-QLabel { link-color: #0A84FF; }
+QLabel a { color: #0A84FF; }
 QPushButton[flat="true"] { color: #0A84FF; border: none; background: transparent; }

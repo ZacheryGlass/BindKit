@@ -76,5 +76,5 @@ QHeaderView::section {
 
 QToolTip { background-color: #171A21; color: #E6E9EF; border: 1px solid #2B3245; }
 
-QLabel { link-color: #5E9BFF; }
+QLabel a { color: #5E9BFF; }
 QPushButton[flat="true"] { color: #5E9BFF; border: none; background: transparent; }
