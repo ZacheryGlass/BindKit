@@ -387,10 +387,8 @@ class MVCApplication:
             # Create hotkey manager
             self.hotkey_manager = HotkeyManager()
 
-            # Connect hotkey triggers to script execution
-            self.hotkey_manager.hotkey_triggered.connect(
-                self.script_controller.execute_script_from_hotkey
-            )
+            # Connect hotkey triggers to handler that dispatches to appropriate action
+            self.hotkey_manager.hotkey_triggered.connect(self._handle_hotkey_triggered)
 
             # Connect to registration failures to track them for user notification
             self.hotkey_manager.registration_failed.connect(self._on_hotkey_registration_failed)
@@ -422,6 +420,20 @@ class MVCApplication:
         except Exception as e:
             self.logger.error(f"Error setting up hotkey management: {e}")
     
+    def _handle_hotkey_triggered(self, script_name: str, hotkey_string: str):
+        """Handle hotkey triggers and dispatch to appropriate action"""
+        from core.hotkey_manager import SYSTEM_SHOW_MENU
+
+        if script_name == SYSTEM_SHOW_MENU:
+            # Show tray menu at screen center
+            self.logger.debug(f"System show menu hotkey triggered: {hotkey_string}")
+            if self.tray_view:
+                self.tray_view.show_menu_at_center()
+        else:
+            # Execute script
+            if self.script_controller:
+                self.script_controller.execute_script_from_hotkey(script_name)
+
     def _on_hotkey_registration_failed(self, script_name: str, hotkey_string: str, error_message: str):
         """Handle hotkey registration failure"""
         self._failed_hotkey_registrations[script_name] = error_message
@@ -472,13 +484,23 @@ class MVCApplication:
         return self.hotkey_manager.validate_registration_status()
 
     def _register_hotkeys(self):
-        """Register all configured hotkeys"""
+        """Register all configured hotkeys including system hotkeys"""
         try:
+            # Register script hotkeys
             hotkey_mappings = self.script_controller.get_all_hotkeys()
 
             for script_name, hotkey in hotkey_mappings.items():
                 self.hotkey_manager.register_hotkey(script_name, hotkey)
                 self.logger.debug(f"Registered hotkey {hotkey} for script {script_name}")
+
+            # Register system show menu hotkey
+            from core.hotkey_manager import SYSTEM_SHOW_MENU
+            from core.settings import SettingsManager
+            settings = SettingsManager()
+            show_menu_hotkey = settings.get_show_menu_hotkey()
+            if show_menu_hotkey:
+                self.hotkey_manager.register_hotkey(SYSTEM_SHOW_MENU, show_menu_hotkey)
+                self.logger.debug(f"Registered system show menu hotkey: {show_menu_hotkey}")
 
         except Exception as e:
             self.logger.error(f"Error registering hotkeys: {e}")
@@ -573,6 +595,7 @@ class MVCApplication:
         self._settings_view.single_instance_changed.connect(self._settings_controller.set_single_instance)
         self._settings_view.show_script_notifications_changed.connect(self._settings_controller.set_show_script_notifications)
         self._settings_view.script_timeout_changed.connect(self._settings_controller.set_script_timeout)
+        self._settings_view.show_menu_hotkey_config_requested.connect(lambda: self._handle_show_menu_hotkey_config(self._settings_controller))
         self._settings_view.script_toggled.connect(self._settings_controller.toggle_script)
         self._settings_view.custom_name_changed.connect(self._settings_controller.set_script_custom_name)
         self._settings_view.external_script_add_requested.connect(lambda path: self._settings_controller.add_external_script(path))
@@ -620,6 +643,9 @@ class MVCApplication:
         self._settings_controller.script_list_updated.connect(self._settings_view.update_script_list)
         # Update hotkeys incrementally for better UX
         self._settings_controller.hotkey_updated.connect(lambda s, h: self._settings_view.update_script_hotkey(s, h))
+        self._settings_controller.show_menu_hotkey_updated.connect(self._settings_view.update_show_menu_hotkey)
+        # Refresh hotkey registrations when show menu hotkey changes
+        self._settings_controller.show_menu_hotkey_updated.connect(lambda h: self._refresh_hotkey_registrations())
         self._settings_controller.preset_updated.connect(self._settings_view.update_preset_list)
         self._settings_controller.appearance_settings_updated.connect(self._settings_view.update_appearance_settings)
         # When presets change, refresh tray menu so preset submenus reflect changes
@@ -675,10 +701,8 @@ class MVCApplication:
         controller = self._settings_controller
         view = self._settings_view
 
-        # Break circular references early so Qt can destroy hierarchies
+        # Disconnect schedule runtime signals first
         if controller:
-            controller._settings_view = None
-
             runtime = getattr(controller, '_schedule_runtime', None)
             if runtime:
                 connections = (
@@ -693,18 +717,27 @@ class MVCApplication:
                         signal_obj.disconnect(slot)
                     except (TypeError, RuntimeError):
                         pass
-                controller._schedule_runtime = None
 
+        # Block signals on view before cleanup
         if view:
             try:
                 view.blockSignals(True)
             except (TypeError, RuntimeError):
                 pass
 
+        # Call cleanup methods to clear resources
+        if controller:
+            try:
+                controller.cleanup()
+            except (RuntimeError, AttributeError) as e:
+                self.logger.debug(f"Error calling controller cleanup: {e}")
+
+        # Clear references
         self._settings_view = None
         self._settings_controller = None
         self._settings_opening = False
 
+        # Schedule Qt deletion
         if controller:
             try:
                 controller.deleteLater()
@@ -732,7 +765,25 @@ class MVCApplication:
         
         # Show dialog
         hotkey_view.exec()
-    
+
+    def _handle_show_menu_hotkey_config(self, settings_controller):
+        """Handle show menu hotkey configuration dialog"""
+        # Get current show menu hotkey
+        from core.settings import SettingsManager
+        settings = SettingsManager()
+        current_hotkey = settings.get_show_menu_hotkey()
+
+        # Create hotkey config view
+        hotkey_view = HotkeyConfigView("Show Menu", current_hotkey, self.main_view)
+
+        # Connect signals
+        hotkey_view.hotkey_set.connect(lambda h: settings_controller.set_show_menu_hotkey(h))
+        hotkey_view.hotkey_cleared.connect(lambda: settings_controller.set_show_menu_hotkey(""))
+        hotkey_view.validation_requested.connect(lambda h: self._validate_show_menu_hotkey(h, hotkey_view))
+
+        # Show dialog
+        hotkey_view.exec()
+
     def _handle_preset_editor(self, script_name, settings_controller, preset_name: str = None):
         """Handle preset editor dialog for add or edit."""
         # Get script info
@@ -798,7 +849,29 @@ class MVCApplication:
             hotkey_view.show_validation_warning("This hotkey is reserved by the system")
         else:
             hotkey_view.clear_validation()
-        
+
+        return True
+
+    def _validate_show_menu_hotkey(self, hotkey, hotkey_view):
+        """Validate the show menu hotkey and show feedback in view"""
+        # Check if hotkey conflicts with any script hotkeys
+        existing_script = self._find_script_with_hotkey(hotkey)
+        if existing_script:
+            hotkey_view.show_validation_error(f"Hotkey already assigned to script: {existing_script}")
+            return False
+
+        # Check for system hotkeys
+        system_hotkeys = [
+            'Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+A', 'Ctrl+Z', 'Ctrl+Y',
+            'Ctrl+S', 'Ctrl+O', 'Ctrl+N', 'Ctrl+P', 'Ctrl+F',
+            'Alt+Tab', 'Alt+F4', 'Win+L', 'Win+D', 'Win+Tab'
+        ]
+
+        if hotkey in system_hotkeys:
+            hotkey_view.show_validation_warning("This hotkey is reserved by the system")
+        else:
+            hotkey_view.clear_validation()
+
         return True
     
     def _find_script_with_hotkey(self, hotkey):

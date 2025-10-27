@@ -33,6 +33,7 @@ class SettingsController(QObject):
     execution_settings_updated = pyqtSignal(dict)
     script_list_updated = pyqtSignal(list)  # List of script configurations
     hotkey_updated = pyqtSignal(str, str)  # script_name, hotkey
+    show_menu_hotkey_updated = pyqtSignal(str)  # hotkey string
     preset_updated = pyqtSignal(str, dict)  # script_name, presets
     settings_saved = pyqtSignal()
     settings_reset = pyqtSignal(str)  # category that was reset
@@ -91,6 +92,10 @@ class SettingsController(QObject):
             self.execution_settings_updated.emit(settings_data['execution'])
             self._emit_script_list_update(settings_data['scripts'])
             self.appearance_settings_updated.emit(settings_data['appearance'])
+
+            # Emit show menu hotkey update
+            show_menu_hotkey = self._settings_manager.get_show_menu_hotkey()
+            self.show_menu_hotkey_updated.emit(show_menu_hotkey)
 
             logger.info("Settings loaded successfully")
 
@@ -305,6 +310,28 @@ class SettingsController(QObject):
         except Exception as e:
             logger.error(f"Error setting hotkey for {script_name}: {e}")
             self.error_occurred.emit("Hotkey Error", f"Failed to set hotkey: {str(e)}")
+
+    def set_show_menu_hotkey(self, hotkey: str):
+        """Set the system hotkey for showing the tray menu"""
+        logger.info(f"Setting show menu hotkey: {hotkey}")
+
+        try:
+            if hotkey:
+                # Save the hotkey setting
+                self._settings_manager.set_show_menu_hotkey(hotkey)
+            else:
+                # Clear the hotkey
+                self._settings_manager.set_show_menu_hotkey('')
+
+            # Notify view
+            self.show_menu_hotkey_updated.emit(hotkey)
+
+            # Notify main app to refresh hotkey registrations (will be handled in main.py)
+            logger.info(f"Show menu hotkey updated to: {hotkey}")
+
+        except Exception as e:
+            logger.error(f"Error setting show menu hotkey: {e}")
+            self.error_occurred.emit("Hotkey Error", f"Failed to set show menu hotkey: {str(e)}")
 
     def validate_all_hotkeys(self):
         """
@@ -997,3 +1024,15 @@ class SettingsController(QObject):
             )
         except Exception as e:
             logger.error(f"Error handling schedule execution block for {script_name}: {e}")
+
+    def cleanup(self):
+        """Clean up controller resources to prevent memory leaks."""
+        try:
+            # Clear references to prevent circular references
+            self._settings_view = None
+            self._schedule_runtime = None
+            self._theme_manager = None
+
+            logger.debug("SettingsController cleanup completed")
+        except Exception as e:
+            logger.error(f"Error during SettingsController cleanup: {e}")

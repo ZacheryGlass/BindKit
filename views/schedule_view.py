@@ -459,3 +459,27 @@ class ScheduleView(QWidget):
             self.set_schedule_enabled(schedule_info.get('enabled', False))
             self.set_interval(schedule_info.get('interval_seconds', 3600))
             self._next_run_timestamp = schedule_info.get('next_run')
+
+    def clear_data(self):
+        """Clear all schedule data and UI state to prevent memory leaks."""
+        try:
+            # Stop refresh timer
+            if self._refresh_timer:
+                self._refresh_timer.stop()
+
+            # Clear table
+            if self.schedule_table:
+                self.schedule_table.clearContents()
+                self.schedule_table.setRowCount(0)
+
+            # Clear data structures
+            self.script_list.clear()
+            self._display_name_map.clear()
+            self._schedule_data.clear()
+            self._row_lookup.clear()
+            self.selected_script = None
+            self._next_run_timestamp = None
+
+            logger.debug("ScheduleView data cleared")
+        except Exception as e:
+            logger.error(f"Error clearing ScheduleView data: {e}")

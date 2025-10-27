@@ -44,7 +44,10 @@ class SettingsView(QDialog):
     
     # Execution settings
     script_timeout_changed = pyqtSignal(int)
-    
+
+    # System hotkeys
+    show_menu_hotkey_config_requested = pyqtSignal()
+
     # Script management
     script_toggled = pyqtSignal(str, bool)  # script_name, enabled
     hotkey_configuration_requested = pyqtSignal(str)  # script_name
@@ -95,6 +98,9 @@ class SettingsView(QDialog):
         
         # Spinboxes for numeric settings
         self.timeout_spinbox = None
+
+        # System hotkeys
+        self.show_menu_hotkey_btn = None
 
         # Appearance controls
         self.theme_combo = None
@@ -199,9 +205,27 @@ class SettingsView(QDialog):
         
         execution_group.setLayout(execution_layout)
         layout.addWidget(execution_group)
-        
+
+        # System Hotkeys Group
+        system_hotkeys_group = QGroupBox("System Hotkeys")
+        system_hotkeys_layout = QVBoxLayout()
+
+        # Show menu hotkey
+        show_menu_layout = QHBoxLayout()
+        show_menu_layout.addWidget(QLabel("Show menu:"))
+        self.show_menu_hotkey_btn = QPushButton()
+        self.show_menu_hotkey_btn.setMinimumWidth(150)
+        self.show_menu_hotkey_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.show_menu_hotkey_btn.clicked.connect(self.show_menu_hotkey_config_requested.emit)
+        show_menu_layout.addWidget(self.show_menu_hotkey_btn)
+        show_menu_layout.addStretch()
+        system_hotkeys_layout.addLayout(show_menu_layout)
+
+        system_hotkeys_group.setLayout(system_hotkeys_layout)
+        layout.addWidget(system_hotkeys_group)
+
         layout.addStretch()
-        
+
         self.tab_widget.addTab(tab, "General")
 
     def _create_appearance_tab(self):
@@ -504,6 +528,14 @@ class SettingsView(QDialog):
     def update_execution_settings(self, settings: Dict[str, Any]):
         """Update execution settings display"""
         self.timeout_spinbox.setValue(settings.get('script_timeout_seconds', 30))
+
+    def update_show_menu_hotkey(self, hotkey: str):
+        """Update show menu hotkey button display"""
+        if self.show_menu_hotkey_btn:
+            display_text = hotkey if hotkey else 'Click to set'
+            self.show_menu_hotkey_btn.setText(display_text)
+            tooltip = f"Current hotkey: {hotkey}\nClick to change" if hotkey else "No hotkey set. Click to change"
+            self.show_menu_hotkey_btn.setToolTip(tooltip)
 
     def update_appearance_settings(self, settings: Dict[str, Any]):
         """Update appearance settings display."""
@@ -1150,3 +1182,35 @@ class SettingsView(QDialog):
             QMessageBox.warning(self, "Hotkey Validation Results", message)
         else:
             QMessageBox.information(self, "Hotkey Validation Results", message)
+
+    def closeEvent(self, event):
+        """Clean up resources when dialog is closed to prevent memory leaks."""
+        try:
+            # Clear table contents to release cell widgets (QPushButtons)
+            if self.script_table:
+                self.script_table.clearContents()
+                self.script_table.setRowCount(0)
+
+            if self.preset_table:
+                self.preset_table.clearContents()
+                self.preset_table.setRowCount(0)
+
+            # Clear schedule view if it exists
+            if self.schedule_view:
+                try:
+                    self.schedule_view.clear_data()
+                except (AttributeError, RuntimeError) as e:
+                    logger.debug(f"Could not clear schedule view data: {e}")
+
+            # Clear data structures
+            if hasattr(self, '_script_data'):
+                self._script_data.clear()
+            if hasattr(self, '_preset_data'):
+                self._preset_data.clear()
+
+            logger.debug("SettingsView cleanup completed")
+        except Exception as e:
+            logger.error(f"Error during SettingsView cleanup: {e}")
+        finally:
+            # Always call parent closeEvent
+            super().closeEvent(event)
