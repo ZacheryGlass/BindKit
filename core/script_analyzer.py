@@ -216,58 +216,86 @@ class ScriptAnalyzer:
 
         arguments = []
 
-        # Find param() block - supports multiline
-        param_pattern = r'param\s*\((.*?)\)'
-        param_match = re.search(param_pattern, source_code, re.DOTALL | re.IGNORECASE)
-
-        if not param_match:
+        # Find param() block - supports multiline and nested parentheses
+        # We need to match nested parens in [Parameter(...)]
+        # Use a more sophisticated approach: find "param(" then match until we find the closing ")"
+        param_start = re.search(r'param\s*\(', source_code, re.IGNORECASE)
+        if not param_start:
             logger.debug("No param() block found in PowerShell script")
             return arguments
 
-        param_block = param_match.group(1)
+        # Find the matching closing parenthesis
+        paren_count = 1
+        start_pos = param_start.end()
+        pos = start_pos
+
+        while pos < len(source_code) and paren_count > 0:
+            if source_code[pos] == '(':
+                paren_count += 1
+            elif source_code[pos] == ')':
+                paren_count -= 1
+            pos += 1
+
+        if paren_count != 0:
+            logger.debug("No matching closing parenthesis found in PowerShell script")
+            return arguments
+
+        param_block = source_code[start_pos:pos - 1]
 
         # Extract individual parameters
-        # Pattern to match PowerShell parameter declarations
-        # Example: [Parameter(Mandatory=$true)][string]$Name
-        param_decl_pattern = r'\[Parameter\([^\]]*\)\]\s*(?:\[(\w+)\])?\s*\$(\w+)'
+        # Pattern to match PowerShell parameter declarations with flexible whitespace/newlines
+        # Matches patterns like:
+        #   [Parameter(Mandatory=$true)]
+        #   [string]$Name
+        # or
+        #   [Parameter(Mandatory=$false)]
+        #   [string]$Message = "default"
 
-        for match in re.finditer(param_decl_pattern, param_block, re.MULTILINE):
-            param_type = match.group(1) or 'string'
-            param_name = match.group(2)
+        # First, find all lines that have a $variable declaration
+        var_pattern = r'\$(\w+)'
 
-            # Check if parameter is mandatory
-            is_mandatory = 'Mandatory' in param_block[match.start():match.end() + 100]
+        # For each parameter found, check if it has a [Parameter()] decorator
+        for var_match in re.finditer(var_pattern, param_block):
+            param_name = var_match.group(1)
+            var_start = var_match.start()
 
-            # Try to extract help message from comment
+            # Look backward from the variable to find decorators
+            # Get text from start of param_block to the variable
+            leading_text = param_block[:var_start]
+
+            # Check if this parameter was already processed (it will be at the end of leading_text)
+            last_newline = leading_text.rfind('\n')
+            if last_newline == -1:
+                last_newline = 0
+            else:
+                last_newline += 1
+
+            line_before_var = leading_text[last_newline:]
+
+            # Check for [Parameter(...)] in recent lines before this variable
+            param_decorator_pattern = r'\[Parameter\([^\]]*Mandatory=\$true[^\]]*\)\]'
+            is_mandatory = bool(re.search(param_decorator_pattern, leading_text[-200:], re.IGNORECASE))
+
+            # Look for type annotation [Type]$Name
+            type_pattern = r'\[(\w+)\]\s*\$' + re.escape(param_name)
+            type_match = re.search(type_pattern, param_block)
+            param_type = type_match.group(1).lower() if type_match else 'string'
+
+            # Try to extract help message from comment on the same line or nearby
             help_text = ""
-            # Look for comment before or after parameter
-            help_pattern = rf'\${{param_name}}.*?#\s*(.+?)(?:\n|$)'
-            help_match = re.search(help_pattern, param_block, re.MULTILINE)
+            help_pattern = rf'\${{param_name}}\s*(?:=\s*[^\n]*)?\s*#\s*(.+?)(?:\n|$)'
+            help_match = re.search(help_pattern, param_block)
             if help_match:
                 help_text = help_match.group(1).strip()
 
-            arguments.append(ArgumentInfo(
-                name=param_name,
-                required=is_mandatory,
-                type=param_type.lower(),
-                help=help_text
-            ))
-
-        # Also check for simple parameter declarations without [Parameter()]
-        simple_param_pattern = r'(?<!\[Parameter)\[(\w+)\]\s*\$(\w+)'
-        for match in re.finditer(simple_param_pattern, param_block):
-            param_type = match.group(1)
-            param_name = match.group(2)
-
-            # Skip if already found with [Parameter()]
-            if any(arg.name == param_name for arg in arguments):
-                continue
-
-            arguments.append(ArgumentInfo(
-                name=param_name,
-                required=False,
-                type=param_type.lower()
-            ))
+            # Only add if we found a type annotation or Parameter attribute (to filter out $0, $1, etc.)
+            if re.search(r'\[' + re.escape(param_type) + r'\]\s*\$' + re.escape(param_name), param_block):
+                arguments.append(ArgumentInfo(
+                    name=param_name,
+                    required=is_mandatory,
+                    type=param_type,
+                    help=help_text
+                ))
 
         logger.debug(f"Extracted {len(arguments)} PowerShell parameters")
         return arguments

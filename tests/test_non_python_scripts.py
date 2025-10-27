@@ -360,6 +360,10 @@ class TestSettingsForMultipleScriptTypes:
         """Test interpreter path settings."""
         settings = SettingsManager()
 
+        # Reset to defaults first
+        settings.set('interpreters/wsl_distro', 'Ubuntu')
+        settings.sync()
+
         # Test getting default interpreter settings
         ps_path = settings.get('interpreters/powershell_path')
         bash_path = settings.get('interpreters/bash_path')
@@ -375,3 +379,8 @@ class TestSettingsForMultipleScriptTypes:
 
         settings.set('interpreters/wsl_distro', 'Debian')
         assert settings.get('interpreters/wsl_distro') == 'Debian'
+
+        # Clean up - reset to defaults for next test run
+        settings.set('interpreters/wsl_distro', 'Ubuntu')
+        settings.set('interpreters/powershell_path', None)
+        settings.sync()

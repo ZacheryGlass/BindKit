@@ -12,8 +12,15 @@ from unittest.mock import Mock, MagicMock
 # Add project root to Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from PyQt6.QtCore import QCoreApplication
-from PyQt6.QtWidgets import QApplication
+# Try to import and setup PyQt6, but gracefully handle cases where display is not available
+try:
+    from PyQt6.QtCore import QCoreApplication
+    from PyQt6.QtWidgets import QApplication
+    QT_AVAILABLE = True
+except (ImportError, RuntimeError) as e:
+    QT_AVAILABLE = False
+    QApplication = None
+    QCoreApplication = None
 
 
 @pytest.fixture(scope="session")
@@ -21,7 +28,11 @@ def qapp():
     """
     Session-wide QApplication instance.
     Required for any tests that use Qt components.
+    Skips if PyQt6 is not available (e.g., in headless environments).
     """
+    if not QT_AVAILABLE:
+        pytest.skip("PyQt6 not available in this environment")
+
     app = QCoreApplication.instance()
     if app is None:
         app = QApplication([])
