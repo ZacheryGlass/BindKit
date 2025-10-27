@@ -117,7 +117,7 @@ class TrayController(QObject):
                     script_info, effective_name, status, hotkey, max_name_length
                 ))
         return {
-            'title': 'Desktop Utilities',
+            'title': 'BindKit ⚙️',
             'items': menu_items
         }
 

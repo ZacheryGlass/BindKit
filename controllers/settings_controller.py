@@ -10,6 +10,8 @@ from pathlib import Path
 from PyQt6.QtCore import QObject, pyqtSignal
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
+from core.theme_manager import ThemeManager
+
 logger = logging.getLogger('Controllers.Settings')
 
 
@@ -46,6 +48,7 @@ class SettingsController(QObject):
         self._script_execution = script_controller._script_execution
         self._hotkey_model = script_controller._hotkey_model
         self._settings_manager = self._script_collection._settings
+        self._theme_manager = ThemeManager()
 
         # Track current settings state
         self._current_settings = {}
@@ -73,7 +76,9 @@ class SettingsController(QObject):
                 'presets': self._load_all_presets(),
                 'appearance': {
                     'theme': self._settings_manager.get('appearance/theme', 'Slate'),
-                    'follow_system': bool(self._settings_manager.get('appearance/follow_system', False))
+                    'follow_system': bool(self._settings_manager.get('appearance/follow_system', False)),
+                    'font_size': self._get_font_size_setting(),
+                    'padding_scale': self._get_padding_scale_setting()
                 }
             }
 
@@ -407,10 +412,8 @@ class SettingsController(QObject):
             if not theme_name:
                 theme_name = 'Slate'
             self._settings_manager.set('appearance/theme', theme_name)
-            self.appearance_settings_updated.emit({
-                'theme': theme_name,
-                'follow_system': bool(self._settings_manager.get('appearance/follow_system', False))
-            })
+            self._apply_current_theme()
+            self._emit_appearance_update()
         except Exception as e:
             logger.error(f"Error setting theme: {e}")
             self.error_occurred.emit("Appearance Error", f"Failed to set theme: {str(e)}")
@@ -419,13 +422,94 @@ class SettingsController(QObject):
         """Enable/disable following system theme and persist."""
         try:
             self._settings_manager.set('appearance/follow_system', bool(enabled))
-            self.appearance_settings_updated.emit({
-                'theme': self._settings_manager.get('appearance/theme', 'Slate'),
-                'follow_system': bool(enabled)
-            })
+            self._apply_current_theme()
+            self._emit_appearance_update()
         except Exception as e:
             logger.error(f"Error setting follow system theme: {e}")
             self.error_occurred.emit("Appearance Error", f"Failed to update appearance: {str(e)}")
+
+    def set_font_size(self, size: int):
+        """Persist a new global font size."""
+        try:
+            normalized = self._normalize_font_size(size)
+            self._settings_manager.set('appearance/font_size', normalized)
+            self._apply_current_theme()
+            self._emit_appearance_update()
+        except Exception as e:
+            logger.error(f"Error setting font size: {e}")
+            self.error_occurred.emit("Appearance Error", f"Failed to update font size: {str(e)}")
+
+    def set_padding_scale(self, scale: float):
+        """Persist a new layout density scale."""
+        try:
+            normalized = self._normalize_padding_scale(scale)
+            self._settings_manager.set('appearance/padding_scale', normalized)
+            self._apply_current_theme()
+            self._emit_appearance_update()
+        except Exception as e:
+            logger.error(f"Error setting layout density: {e}")
+            self.error_occurred.emit("Appearance Error", f"Failed to update spacing: {str(e)}")
+    
+    def _apply_current_theme(self):
+        """Apply the currently configured theme immediately."""
+        preferred = ThemeManager.DEFAULT_THEME_NAME
+        follow_system = False
+        font_size = self._get_font_size_setting()
+        padding_scale = self._get_padding_scale_setting()
+        try:
+            preferred = self._settings_manager.get('appearance/theme', ThemeManager.DEFAULT_THEME_NAME)
+            follow_system = bool(self._settings_manager.get('appearance/follow_system', False))
+            effective = self._theme_manager.resolve_effective_theme(preferred, follow_system)
+            if not self._theme_manager.apply_theme(effective, font_size=font_size, padding_scale=padding_scale):
+                logger.warning(
+                    "Theme application reported failure "
+                    f"(preferred={preferred}, effective={effective}, font_size={font_size}, padding={padding_scale})"
+                )
+        except Exception as e:
+            logger.error(
+                f"Failed to apply theme '{preferred}' "
+                f"(follow_system={follow_system}, font_size={font_size}, padding={padding_scale}): {e}"
+            )
+
+    def _emit_appearance_update(self):
+        """Emit the latest appearance settings for the view."""
+        try:
+            self.appearance_settings_updated.emit({
+                'theme': self._settings_manager.get('appearance/theme', 'Slate'),
+                'follow_system': bool(self._settings_manager.get('appearance/follow_system', False)),
+                'font_size': self._get_font_size_setting(),
+                'padding_scale': self._get_padding_scale_setting()
+            })
+        except Exception as e:
+            logger.debug(f"Failed emitting appearance update: {e}")
+
+    def _get_font_size_setting(self) -> int:
+        """Return the clamped font size preference."""
+        value = self._settings_manager.get('appearance/font_size', 11)
+        return self._normalize_font_size(value)
+
+    @staticmethod
+    def _normalize_font_size(value) -> int:
+        """Clamp font size to a sensible range."""
+        try:
+            size = int(value)
+        except (TypeError, ValueError):
+            size = 11
+        return max(9, min(18, size))
+
+    def _get_padding_scale_setting(self) -> float:
+        """Return the clamped padding scale preference."""
+        value = self._settings_manager.get('appearance/padding_scale', 1.0)
+        return self._normalize_padding_scale(value)
+
+    @staticmethod
+    def _normalize_padding_scale(value) -> float:
+        """Clamp padding scale to a sensible range."""
+        try:
+            scale = float(value)
+        except (TypeError, ValueError):
+            scale = 1.0
+        return max(0.8, min(1.4, scale))
     
     def remove_external_script(self, script_name: str):
         """Remove an external script"""

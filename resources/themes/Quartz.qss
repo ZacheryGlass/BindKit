@@ -7,9 +7,28 @@ QWidget {
     color: #111827;
 }
 
-QMenu, QDialog, QFrame, QTabWidget::pane {
+QLabel, QCheckBox, QRadioButton, QGroupBox, QTabWidget::tab-bar {
+    color: #111827;
+}
+
+QMenu, QDialog, QTabWidget::pane {
     background-color: #F4F6F8;
     border: 1px solid #D0D7DE;
+}
+
+QGroupBox {
+    background-color: #F4F6F8;
+    border: 1px solid #D0D7DE;
+    border-radius: 6px;
+    margin-top: 12px;
+    padding: 10px;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 14px;
+    padding: 0 6px;
+    background-color: transparent;
 }
 
 QMenu::item {
@@ -37,12 +56,21 @@ QPushButton:hover { background-color: #DFE6EC; }
 QPushButton:pressed { background-color: #D5DEE6; }
 QPushButton:disabled { color: #9AA3AE; border-color: #E0E6EB; }
 
-QLineEdit, QSpinBox, QComboBox, QTableWidget, QTableView, QListWidget, QTextEdit {
+QLineEdit, QSpinBox, QComboBox, QTextEdit {
     background-color: #FFFFFF;
     color: #111827;
     border: 1px solid #D0D7DE;
     selection-background-color: #0A84FF;
     selection-color: #FFFFFF;
+}
+
+QTableWidget, QTableView, QListWidget, QListView, QTreeWidget, QTreeView {
+    background-color: #FFFFFF;
+    color: #111827;
+    border: 1px solid #D0D7DE;
+    selection-background-color: #0A84FF;
+    selection-color: #FFFFFF;
+    alternate-background-color: #F4F6FB;
 }
 
 QHeaderView::section {
@@ -60,4 +88,3 @@ QToolTip {
 /* Links / accents */
 QLabel { link-color: #0A84FF; }
 QPushButton[flat="true"] { color: #0A84FF; border: none; background: transparent; }
-

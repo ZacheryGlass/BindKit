@@ -29,7 +29,7 @@ class TrayIconModel(QObject):
     def __init__(self):
         super().__init__()
         self._visible = False
-        self._tooltip = "Desktop Utilities"
+        self._tooltip = "BindKit"
         self._supports_notifications = False
         
         logger.info("TrayIconModel initialized")
@@ -144,7 +144,7 @@ class NotificationModel(QObject):
         """Show the application startup notification"""
         if self._app_model.should_show_startup_notification():
             self.show_notification(
-                "Desktop Utilities",
+                "BindKit Started",
                 "Application started in system tray. Click the tray icon to access scripts.",
                 QSystemTrayIcon.MessageIcon.Information,
                 "startup"

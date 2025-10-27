@@ -34,7 +34,7 @@ class MainView(QMainWindow):
         super().__init__()
         
         # Set basic window properties
-        self.setWindowTitle("Desktop Utilities")
+        self.setWindowTitle("BindKit Main Window")
         
         # Keep window hidden by default (tray-only operation)
         self.hide()

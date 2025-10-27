@@ -602,6 +602,8 @@ class MVCApplication:
         # Appearance
         self._settings_view.theme_changed.connect(self._settings_controller.set_theme)
         self._settings_view.follow_system_theme_changed.connect(self._settings_controller.set_follow_system_theme)
+        self._settings_view.font_size_changed.connect(self._settings_controller.set_font_size)
+        self._settings_view.padding_scale_changed.connect(self._settings_controller.set_padding_scale)
         # Instant-apply: no accept/save button; models persist on change
         
         # Controller -> View connections
@@ -949,8 +951,27 @@ def main():
                 preferred = theme_settings.get('appearance/theme', ThemeManager.DEFAULT_THEME_NAME)
                 follow = bool(theme_settings.get('appearance/follow_system', False))
                 effective = theme_manager.resolve_effective_theme(preferred, follow)
-                theme_manager.apply_theme(effective)
-                logger.info(f"Theme applied (preferred={preferred}, follow_system={follow}, effective={effective})")
+                font_pref = theme_settings.get('appearance/font_size', 11)
+                padding_pref = theme_settings.get('appearance/padding_scale', 1.0)
+                try:
+                    font_pref = int(font_pref)
+                except (TypeError, ValueError):
+                    font_pref = None
+                try:
+                    padding_pref = float(padding_pref)
+                except (TypeError, ValueError):
+                    padding_pref = None
+
+                theme_manager.apply_theme(
+                    effective,
+                    font_size=font_pref,
+                    padding_scale=padding_pref
+                )
+                logger.info(
+                    "Theme applied "
+                    f"(preferred={preferred}, follow_system={follow}, effective={effective}, "
+                    f"font={font_pref}, padding={padding_pref})"
+                )
             except Exception as e_inner:
                 logger.error(f"Theme application failed: {e_inner}")
 

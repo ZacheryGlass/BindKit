@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGroupBox, QCheckBox,
     QLabel, QPushButton, QWidget, QTabWidget,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QSpinBox, QComboBox, QListWidget, QListWidgetItem, QMessageBox,
+    QSpinBox, QDoubleSpinBox, QComboBox, QListWidget, QListWidgetItem, QMessageBox,
     QFileDialog, QInputDialog, QFrame
 )
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -70,6 +70,8 @@ class SettingsView(QDialog):
     # Appearance
     theme_changed = pyqtSignal(str)
     follow_system_theme_changed = pyqtSignal(bool)
+    font_size_changed = pyqtSignal(int)
+    padding_scale_changed = pyqtSignal(float)
     
     # Dialog actions (instant-apply mode: no OK/Cancel buttons)
     
@@ -97,6 +99,8 @@ class SettingsView(QDialog):
         # Appearance controls
         self.theme_combo = None
         self.follow_system_checkbox = None
+        self.font_size_spinbox = None
+        self.layout_density_spinbox = None
         
         # Track current data
         self._script_data = []
@@ -205,7 +209,7 @@ class SettingsView(QDialog):
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
-        theme_group = QGroupBox("Theme")
+        theme_group = QGroupBox("Theme & Layout")
         theme_layout = QVBoxLayout()
 
         # Follow system option
@@ -222,6 +226,33 @@ class SettingsView(QDialog):
         row.addWidget(self.theme_combo)
         row.addStretch()
         theme_layout.addLayout(row)
+
+        # Font size control
+        font_row = QHBoxLayout()
+        font_row.addWidget(QLabel("Font size (pt):"))
+        self.font_size_spinbox = QSpinBox()
+        self.font_size_spinbox.setRange(9, 18)
+        self.font_size_spinbox.setValue(11)
+        self.font_size_spinbox.valueChanged.connect(self.font_size_changed.emit)
+        font_row.addWidget(self.font_size_spinbox)
+        font_row.addStretch()
+        theme_layout.addLayout(font_row)
+
+        # Layout density control
+        density_row = QHBoxLayout()
+        density_row.addWidget(QLabel("Layout density:"))
+        self.layout_density_spinbox = QDoubleSpinBox()
+        self.layout_density_spinbox.setRange(0.8, 1.4)
+        self.layout_density_spinbox.setSingleStep(0.05)
+        self.layout_density_spinbox.setDecimals(2)
+        self.layout_density_spinbox.setValue(1.0)
+        self.layout_density_spinbox.valueChanged.connect(self._on_density_changed)
+        density_row.addWidget(self.layout_density_spinbox)
+        density_hint = QLabel("Lower = compact, higher = roomy")
+        density_hint.setWordWrap(False)
+        density_row.addWidget(density_hint)
+        density_row.addStretch()
+        theme_layout.addLayout(density_row)
 
         theme_group.setLayout(theme_layout)
         layout.addWidget(theme_group)
@@ -480,9 +511,35 @@ class SettingsView(QDialog):
             theme = settings.get('theme', 'Slate')
             idx = self.theme_combo.findText(theme)
             if idx >= 0:
+                block = self.theme_combo.blockSignals(True)
                 self.theme_combo.setCurrentIndex(idx)
+                self.theme_combo.blockSignals(block)
         if self.follow_system_checkbox:
+            block = self.follow_system_checkbox.blockSignals(True)
             self.follow_system_checkbox.setChecked(bool(settings.get('follow_system', False)))
+            self.follow_system_checkbox.blockSignals(block)
+        if self.font_size_spinbox:
+            font_value = settings.get('font_size', 11)
+            try:
+                font_value = int(font_value)
+            except (TypeError, ValueError):
+                font_value = 11
+            block = self.font_size_spinbox.blockSignals(True)
+            self.font_size_spinbox.setValue(font_value)
+            self.font_size_spinbox.blockSignals(block)
+        if self.layout_density_spinbox:
+            density_value = settings.get('padding_scale', 1.0)
+            try:
+                density_value = float(density_value)
+            except (TypeError, ValueError):
+                density_value = 1.0
+            block = self.layout_density_spinbox.blockSignals(True)
+            self.layout_density_spinbox.setValue(density_value)
+            self.layout_density_spinbox.blockSignals(block)
+
+    def _on_density_changed(self, value: float):
+        """Emit layout density changes as padding scale updates."""
+        self.padding_scale_changed.emit(value)
     
     def update_script_list(self, scripts: List[Dict[str, Any]]):
         """Update the scripts table"""
