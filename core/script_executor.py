@@ -45,7 +45,97 @@ class ScriptExecutor:
         self.schedule_runtime = ScheduleRuntime()
 
         logger.info("ScriptExecutor initialized with ServiceRuntime and ScheduleRuntime support")
-    
+
+        # Cache for detected interpreters
+        self._interpreter_cache = {}
+
+    def _detect_powershell(self) -> Optional[str]:
+        """Detect PowerShell interpreter (prefer pwsh.exe over powershell.exe)."""
+        if 'powershell' in self._interpreter_cache:
+            return self._interpreter_cache['powershell']
+
+        # Check settings first
+        if self.settings:
+            custom_path = self.settings.get('interpreters/powershell_path')
+            if custom_path and os.path.exists(custom_path):
+                self._interpreter_cache['powershell'] = custom_path
+                return custom_path
+
+        # Try pwsh.exe (PowerShell Core) first
+        import shutil
+        pwsh_path = shutil.which('pwsh')
+        if pwsh_path:
+            self._interpreter_cache['powershell'] = pwsh_path
+            logger.info(f"Detected PowerShell Core at: {pwsh_path}")
+            return pwsh_path
+
+        # Fall back to powershell.exe (Windows PowerShell)
+        ps_path = shutil.which('powershell')
+        if ps_path:
+            self._interpreter_cache['powershell'] = ps_path
+            logger.info(f"Detected Windows PowerShell at: {ps_path}")
+            return ps_path
+
+        logger.warning("PowerShell not found")
+        return None
+
+    def _detect_bash(self) -> Optional[str]:
+        """Detect bash interpreter (check WSL or custom path)."""
+        if 'bash' in self._interpreter_cache:
+            return self._interpreter_cache['bash']
+
+        # Check settings for custom bash path first
+        if self.settings:
+            custom_path = self.settings.get('interpreters/bash_path')
+            if custom_path and os.path.exists(custom_path):
+                self._interpreter_cache['bash'] = custom_path
+                return custom_path
+
+            # Check if WSL should be used
+            use_wsl = self.settings.get('interpreters/use_wsl', True)
+            if use_wsl:
+                # Check if WSL is available
+                import shutil
+                wsl_path = shutil.which('wsl')
+                if wsl_path:
+                    # WSL is available, return a special marker
+                    distro = self.settings.get('interpreters/wsl_distro', 'Ubuntu')
+                    wsl_cmd = f'wsl:{distro}'
+                    self._interpreter_cache['bash'] = wsl_cmd
+                    logger.info(f"Using WSL with distro: {distro}")
+                    return wsl_cmd
+
+        # Try to find native bash
+        import shutil
+        bash_path = shutil.which('bash')
+        if bash_path:
+            self._interpreter_cache['bash'] = bash_path
+            logger.info(f"Detected bash at: {bash_path}")
+            return bash_path
+
+        logger.warning("Bash not found")
+        return None
+
+    def _detect_cmd(self) -> Optional[str]:
+        """Detect cmd.exe (always available on Windows)."""
+        if 'cmd' in self._interpreter_cache:
+            return self._interpreter_cache['cmd']
+
+        import shutil
+        cmd_path = shutil.which('cmd')
+        if cmd_path:
+            self._interpreter_cache['cmd'] = cmd_path
+            return cmd_path
+
+        # Fallback to system32
+        system32_cmd = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'cmd.exe')
+        if os.path.exists(system32_cmd):
+            self._interpreter_cache['cmd'] = system32_cmd
+            return system32_cmd
+
+        logger.error("cmd.exe not found (unexpected on Windows)")
+        return None
+
     def execute_script(self, script_info: ScriptInfo, arguments: Optional[Dict[str, Any]] = None) -> ExecutionResult:
         """Execute a script using the appropriate strategy."""
         # Perform periodic cleanup
@@ -71,6 +161,12 @@ class ScriptExecutor:
                 return self._execute_module(script_info, arguments)
             elif script_info.execution_strategy == ExecutionStrategy.SERVICE:
                 return self._execute_service(script_info, arguments)
+            elif script_info.execution_strategy == ExecutionStrategy.POWERSHELL:
+                return self._execute_powershell(script_info, arguments)
+            elif script_info.execution_strategy == ExecutionStrategy.BATCH:
+                return self._execute_batch(script_info, arguments)
+            elif script_info.execution_strategy == ExecutionStrategy.SHELL:
+                return self._execute_shell(script_info, arguments)
             else:
                 return ExecutionResult(
                     success=False,
@@ -389,6 +485,200 @@ class ScriptExecutor:
             return ExecutionResult(
                 success=False,
                 error=f"Service execution failed: {str(e)}"
+            )
+
+    def _execute_powershell(self, script_info: ScriptInfo, arguments: Dict[str, Any]) -> ExecutionResult:
+        """Execute PowerShell script with arguments."""
+        # Detect PowerShell interpreter
+        ps_path = self._detect_powershell()
+        if not ps_path:
+            return ExecutionResult(
+                success=False,
+                error="PowerShell not found. Please install PowerShell Core or configure path in Settings."
+            )
+
+        # Build command
+        cmd = [ps_path, '-ExecutionPolicy', 'Bypass', '-File', str(script_info.file_path)]
+
+        # Add arguments as named parameters
+        for arg_info in script_info.arguments:
+            if arg_info.name in arguments:
+                value = arguments[arg_info.name]
+                if value is not None and value != "":
+                    cmd.extend([f"-{arg_info.name}", str(value)])
+
+        logger.debug(f"Executing PowerShell command: {' '.join(cmd)}")
+
+        try:
+            used_timeout = self.settings.get_script_timeout_seconds() if self.settings else 30
+
+            process = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=used_timeout,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            )
+
+            success = process.returncode == 0
+            output = process.stdout.strip() if process.stdout else ""
+            error = process.stderr.strip() if process.stderr else ""
+
+            return ExecutionResult(
+                success=success,
+                message=output if success else f"Script exited with code {process.returncode}",
+                output=output,
+                error=error,
+                return_code=process.returncode
+            )
+
+        except subprocess.TimeoutExpired:
+            return ExecutionResult(
+                success=False,
+                message=f"PowerShell script execution timed out ({used_timeout} seconds)",
+                error="Timeout"
+            )
+        except Exception as e:
+            logger.error(f"PowerShell execution failed: {str(e)}")
+            return ExecutionResult(
+                success=False,
+                error=f"PowerShell execution failed: {str(e)}"
+            )
+
+    def _execute_batch(self, script_info: ScriptInfo, arguments: Dict[str, Any]) -> ExecutionResult:
+        """Execute Batch script with arguments."""
+        # Detect cmd.exe
+        cmd_path = self._detect_cmd()
+        if not cmd_path:
+            return ExecutionResult(
+                success=False,
+                error="cmd.exe not found (unexpected on Windows)"
+            )
+
+        # Build command: cmd.exe /c script.bat arg1 arg2 ...
+        cmd = [cmd_path, '/c', str(script_info.file_path)]
+
+        # Add positional arguments in order
+        for arg_info in sorted(script_info.arguments, key=lambda a: a.name):
+            if arg_info.name in arguments:
+                value = arguments[arg_info.name]
+                if value is not None and value != "":
+                    cmd.append(str(value))
+
+        logger.debug(f"Executing Batch command: {' '.join(cmd)}")
+
+        try:
+            used_timeout = self.settings.get_script_timeout_seconds() if self.settings else 30
+
+            process = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=used_timeout,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            )
+
+            success = process.returncode == 0
+            output = process.stdout.strip() if process.stdout else ""
+            error = process.stderr.strip() if process.stderr else ""
+
+            return ExecutionResult(
+                success=success,
+                message=output if success else f"Script exited with code {process.returncode}",
+                output=output,
+                error=error,
+                return_code=process.returncode
+            )
+
+        except subprocess.TimeoutExpired:
+            return ExecutionResult(
+                success=False,
+                message=f"Batch script execution timed out ({used_timeout} seconds)",
+                error="Timeout"
+            )
+        except Exception as e:
+            logger.error(f"Batch execution failed: {str(e)}")
+            return ExecutionResult(
+                success=False,
+                error=f"Batch execution failed: {str(e)}"
+            )
+
+    def _execute_shell(self, script_info: ScriptInfo, arguments: Dict[str, Any]) -> ExecutionResult:
+        """Execute Shell script with arguments (via WSL or native bash)."""
+        # Detect bash interpreter
+        bash_path = self._detect_bash()
+        if not bash_path:
+            return ExecutionResult(
+                success=False,
+                error="Bash not found. Please install WSL or configure bash path in Settings."
+            )
+
+        # Build command based on interpreter type
+        if bash_path.startswith('wsl:'):
+            # Using WSL
+            distro = bash_path.split(':')[1]
+            # Convert Windows path to WSL path
+            script_path_str = str(script_info.file_path.absolute())
+            # WSL can access Windows paths via /mnt/c/...
+            if script_path_str[1] == ':':
+                drive_letter = script_path_str[0].lower()
+                wsl_path = f"/mnt/{drive_letter}/{script_path_str[3:].replace(chr(92), '/')}"
+            else:
+                wsl_path = script_path_str.replace(chr(92), '/')
+
+            cmd = ['wsl', '-d', distro, '--exec', 'bash', wsl_path]
+        else:
+            # Using native bash
+            cmd = [bash_path, str(script_info.file_path)]
+
+        # Add arguments
+        for arg_info in script_info.arguments:
+            if arg_info.name in arguments:
+                value = arguments[arg_info.name]
+                if value is not None and value != "":
+                    # For getopts style arguments (single letter)
+                    if len(arg_info.name) == 1:
+                        cmd.extend([f"-{arg_info.name}", str(value)])
+                    else:
+                        # For positional arguments
+                        cmd.append(str(value))
+
+        logger.debug(f"Executing Shell command: {' '.join(cmd)}")
+
+        try:
+            used_timeout = self.settings.get_script_timeout_seconds() if self.settings else 30
+
+            process = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=used_timeout,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0
+            )
+
+            success = process.returncode == 0
+            output = process.stdout.strip() if process.stdout else ""
+            error = process.stderr.strip() if process.stderr else ""
+
+            return ExecutionResult(
+                success=success,
+                message=output if success else f"Script exited with code {process.returncode}",
+                output=output,
+                error=error,
+                return_code=process.returncode
+            )
+
+        except subprocess.TimeoutExpired:
+            return ExecutionResult(
+                success=False,
+                message=f"Shell script execution timed out ({used_timeout} seconds)",
+                error="Timeout"
+            )
+        except Exception as e:
+            logger.error(f"Shell execution failed: {str(e)}")
+            return ExecutionResult(
+                success=False,
+                error=f"Shell execution failed: {str(e)}"
             )
 
     def stop_service(self, script_name: str, timeout: int = 10) -> ExecutionResult:

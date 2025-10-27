@@ -31,11 +31,20 @@ SMART_PUNCTUATION_TRANSLATIONS = {
 SMART_PUNCTUATION_TABLE = str.maketrans(SMART_PUNCTUATION_TRANSLATIONS)
 SMART_PUNCTUATION_CHARS = set(SMART_PUNCTUATION_TRANSLATIONS.keys())
 
+class ScriptType(Enum):
+    PYTHON = "python"
+    POWERSHELL = "powershell"
+    BATCH = "batch"
+    SHELL = "shell"
+
 class ExecutionStrategy(Enum):
     SUBPROCESS = "subprocess"
     FUNCTION_CALL = "function_call"
     MODULE_EXEC = "module_exec"
     SERVICE = "service"
+    POWERSHELL = "powershell"
+    BATCH = "batch"
+    SHELL = "shell"
 
 @dataclass
 class ArgumentInfo:
@@ -51,13 +60,15 @@ class ScriptInfo:
     file_path: Path
     display_name: str
     execution_strategy: ExecutionStrategy
+    script_type: ScriptType = ScriptType.PYTHON
+    interpreter_path: Optional[str] = None
     main_function: Optional[str] = None
     arguments: List[ArgumentInfo] = None
     has_main_block: bool = False
     is_executable: bool = False
     error: Optional[str] = None
     needs_configuration: bool = False
-    
+
     def __post_init__(self):
         if self.arguments is None:
             self.arguments = []
@@ -67,11 +78,36 @@ class ScriptAnalyzer:
         self.settings = settings
     
     def analyze_script(self, script_path: Path) -> ScriptInfo:
-        """Analyze a Python script to determine how to execute it and what arguments it needs."""
+        """Analyze a script to determine how to execute it and what arguments it needs."""
         logger.debug(f"Analyzing script: {script_path}")
-        
+
+        # Route to appropriate analyzer based on file extension
+        suffix = script_path.suffix.lower()
+
+        if suffix == '.py':
+            return self._analyze_python_script(script_path)
+        elif suffix == '.ps1':
+            return self._analyze_powershell_script(script_path)
+        elif suffix in ['.bat', '.cmd']:
+            return self._analyze_batch_script(script_path)
+        elif suffix == '.sh':
+            return self._analyze_shell_script(script_path)
+        else:
+            display_name = self._get_display_name(script_path)
+            return ScriptInfo(
+                file_path=script_path,
+                display_name=display_name,
+                execution_strategy=ExecutionStrategy.SUBPROCESS,
+                is_executable=False,
+                error=f"Unsupported script type: {suffix}"
+            )
+
+    def _analyze_python_script(self, script_path: Path) -> ScriptInfo:
+        """Analyze a Python script to determine how to execute it and what arguments it needs."""
+        logger.debug(f"Analyzing Python script: {script_path}")
+
         display_name = self._get_display_name(script_path)
-        
+
         try:
             with open(script_path, 'r', encoding='utf-8-sig') as f:
                 source_code = f.read()
@@ -116,6 +152,7 @@ class ScriptAnalyzer:
                 file_path=script_path,
                 display_name=display_name,
                 execution_strategy=execution_strategy,
+                script_type=ScriptType.PYTHON,
                 main_function='main' if has_main_function else None,
                 arguments=arguments,
                 has_main_block=has_main_block,
@@ -125,15 +162,298 @@ class ScriptAnalyzer:
             )
             
         except Exception as e:
-            logger.error(f"Error analyzing script {script_path}: {str(e)}")
+            logger.error(f"Error analyzing Python script {script_path}: {str(e)}")
             return ScriptInfo(
                 file_path=script_path,
                 display_name=display_name,
                 execution_strategy=ExecutionStrategy.SUBPROCESS,
+                script_type=ScriptType.PYTHON,
                 is_executable=False,
                 error=str(e)
             )
     
+    def _analyze_powershell_script(self, script_path: Path) -> ScriptInfo:
+        """Analyze a PowerShell script to extract parameters and metadata."""
+        logger.debug(f"Analyzing PowerShell script: {script_path}")
+
+        display_name = self._get_display_name(script_path)
+
+        try:
+            with open(script_path, 'r', encoding='utf-8-sig') as f:
+                source_code = f.read()
+
+            # Extract arguments from param() block
+            arguments = self._extract_powershell_params(source_code)
+
+            # PowerShell scripts are always executable if they have content
+            is_executable = bool(source_code.strip())
+
+            return ScriptInfo(
+                file_path=script_path,
+                display_name=display_name,
+                execution_strategy=ExecutionStrategy.POWERSHELL,
+                script_type=ScriptType.POWERSHELL,
+                arguments=arguments,
+                is_executable=is_executable,
+                needs_configuration=any(arg.required for arg in arguments),
+                error=None if is_executable else "Script is empty"
+            )
+
+        except Exception as e:
+            logger.error(f"Error analyzing PowerShell script {script_path}: {str(e)}")
+            return ScriptInfo(
+                file_path=script_path,
+                display_name=display_name,
+                execution_strategy=ExecutionStrategy.POWERSHELL,
+                script_type=ScriptType.POWERSHELL,
+                is_executable=False,
+                error=str(e)
+            )
+
+    def _extract_powershell_params(self, source_code: str) -> List[ArgumentInfo]:
+        """Extract parameter information from PowerShell param() block."""
+        import re
+
+        arguments = []
+
+        # Find param() block - supports multiline
+        param_pattern = r'param\s*\((.*?)\)'
+        param_match = re.search(param_pattern, source_code, re.DOTALL | re.IGNORECASE)
+
+        if not param_match:
+            logger.debug("No param() block found in PowerShell script")
+            return arguments
+
+        param_block = param_match.group(1)
+
+        # Extract individual parameters
+        # Pattern to match PowerShell parameter declarations
+        # Example: [Parameter(Mandatory=$true)][string]$Name
+        param_decl_pattern = r'\[Parameter\([^\]]*\)\]\s*(?:\[(\w+)\])?\s*\$(\w+)'
+
+        for match in re.finditer(param_decl_pattern, param_block, re.MULTILINE):
+            param_type = match.group(1) or 'string'
+            param_name = match.group(2)
+
+            # Check if parameter is mandatory
+            is_mandatory = 'Mandatory' in param_block[match.start():match.end() + 100]
+
+            # Try to extract help message from comment
+            help_text = ""
+            # Look for comment before or after parameter
+            help_pattern = rf'\${{param_name}}.*?#\s*(.+?)(?:\n|$)'
+            help_match = re.search(help_pattern, param_block, re.MULTILINE)
+            if help_match:
+                help_text = help_match.group(1).strip()
+
+            arguments.append(ArgumentInfo(
+                name=param_name,
+                required=is_mandatory,
+                type=param_type.lower(),
+                help=help_text
+            ))
+
+        # Also check for simple parameter declarations without [Parameter()]
+        simple_param_pattern = r'(?<!\[Parameter)\[(\w+)\]\s*\$(\w+)'
+        for match in re.finditer(simple_param_pattern, param_block):
+            param_type = match.group(1)
+            param_name = match.group(2)
+
+            # Skip if already found with [Parameter()]
+            if any(arg.name == param_name for arg in arguments):
+                continue
+
+            arguments.append(ArgumentInfo(
+                name=param_name,
+                required=False,
+                type=param_type.lower()
+            ))
+
+        logger.debug(f"Extracted {len(arguments)} PowerShell parameters")
+        return arguments
+
+    def _analyze_batch_script(self, script_path: Path) -> ScriptInfo:
+        """Analyze a Batch script (.bat or .cmd file)."""
+        logger.debug(f"Analyzing Batch script: {script_path}")
+
+        display_name = self._get_display_name(script_path)
+
+        try:
+            with open(script_path, 'r', encoding='utf-8-sig') as f:
+                source_code = f.read()
+
+            # Extract arguments from %1, %2, etc. usage
+            arguments = self._extract_batch_params(source_code)
+
+            # Batch scripts are always executable if they have content (not just comments)
+            # Remove empty lines and comments to check for actual code
+            code_lines = [line.strip() for line in source_code.split('\n')
+                         if line.strip() and not line.strip().startswith('REM')
+                         and not line.strip().startswith('::')]
+            is_executable = bool(code_lines)
+
+            return ScriptInfo(
+                file_path=script_path,
+                display_name=display_name,
+                execution_strategy=ExecutionStrategy.BATCH,
+                script_type=ScriptType.BATCH,
+                arguments=arguments,
+                is_executable=is_executable,
+                needs_configuration=any(arg.required for arg in arguments),
+                error=None if is_executable else "Script is empty or contains only comments"
+            )
+
+        except Exception as e:
+            logger.error(f"Error analyzing Batch script {script_path}: {str(e)}")
+            return ScriptInfo(
+                file_path=script_path,
+                display_name=display_name,
+                execution_strategy=ExecutionStrategy.BATCH,
+                script_type=ScriptType.BATCH,
+                is_executable=False,
+                error=str(e)
+            )
+
+    def _extract_batch_params(self, source_code: str) -> List[ArgumentInfo]:
+        """Extract parameter information from Batch script usage."""
+        import re
+
+        arguments = []
+
+        # Find usage of %1, %2, etc.
+        param_pattern = r'%(\d+)'
+        param_numbers = set()
+
+        for match in re.finditer(param_pattern, source_code):
+            param_num = int(match.group(1))
+            if param_num > 0 and param_num <= 9:  # Batch supports %1-%9
+                param_numbers.add(param_num)
+
+        # Create arguments for each found parameter
+        for param_num in sorted(param_numbers):
+            # Try to find description in REM comments
+            help_text = ""
+            help_pattern = rf'REM.*?%{param_num}.*?-\s*(.+?)(?:\n|$)'
+            help_match = re.search(help_pattern, source_code, re.IGNORECASE)
+            if help_match:
+                help_text = help_match.group(1).strip()
+
+            arguments.append(ArgumentInfo(
+                name=f"arg{param_num}",
+                required=False,  # Batch doesn't have a concept of required params
+                type="str",
+                help=help_text
+            ))
+
+        logger.debug(f"Extracted {len(arguments)} Batch parameters")
+        return arguments
+
+    def _analyze_shell_script(self, script_path: Path) -> ScriptInfo:
+        """Analyze a Shell script (.sh file)."""
+        logger.debug(f"Analyzing Shell script: {script_path}")
+
+        display_name = self._get_display_name(script_path)
+
+        try:
+            with open(script_path, 'r', encoding='utf-8-sig') as f:
+                source_code = f.read()
+
+            # Extract arguments from getopts or positional parameters
+            arguments = self._extract_shell_params(source_code)
+
+            # Shell scripts are executable if they have content (not just comments)
+            code_lines = [line.strip() for line in source_code.split('\n')
+                         if line.strip() and not line.strip().startswith('#')]
+            is_executable = bool(code_lines)
+
+            return ScriptInfo(
+                file_path=script_path,
+                display_name=display_name,
+                execution_strategy=ExecutionStrategy.SHELL,
+                script_type=ScriptType.SHELL,
+                arguments=arguments,
+                is_executable=is_executable,
+                needs_configuration=any(arg.required for arg in arguments),
+                error=None if is_executable else "Script is empty or contains only comments"
+            )
+
+        except Exception as e:
+            logger.error(f"Error analyzing Shell script {script_path}: {str(e)}")
+            return ScriptInfo(
+                file_path=script_path,
+                display_name=display_name,
+                execution_strategy=ExecutionStrategy.SHELL,
+                script_type=ScriptType.SHELL,
+                is_executable=False,
+                error=str(e)
+            )
+
+    def _extract_shell_params(self, source_code: str) -> List[ArgumentInfo]:
+        """Extract parameter information from Shell script."""
+        import re
+
+        arguments = []
+
+        # First, try to find getopts usage
+        # Example: while getopts "a:b:c" opt; do
+        getopts_pattern = r'getopts\s+"([^"]+)"'
+        getopts_match = re.search(getopts_pattern, source_code)
+
+        if getopts_match:
+            # Parse getopts string
+            getopts_str = getopts_match.group(1)
+            i = 0
+            while i < len(getopts_str):
+                if getopts_str[i].isalpha():
+                    opt_name = getopts_str[i]
+                    # Check if it requires an argument (followed by :)
+                    requires_arg = (i + 1 < len(getopts_str) and getopts_str[i + 1] == ':')
+
+                    # Try to find help text in comments near the case statement
+                    help_text = ""
+                    help_pattern = rf'{opt_name}\)\s*#\s*(.+?)(?:\n|$)'
+                    help_match = re.search(help_pattern, source_code)
+                    if help_match:
+                        help_text = help_match.group(1).strip()
+
+                    arguments.append(ArgumentInfo(
+                        name=opt_name,
+                        required=False,  # getopts options are typically optional
+                        type="str",
+                        help=help_text
+                    ))
+
+                i += 1
+
+        else:
+            # Check for positional parameters $1, $2, etc.
+            param_pattern = r'\$(\d+)'
+            param_numbers = set()
+
+            for match in re.finditer(param_pattern, source_code):
+                param_num = int(match.group(1))
+                if param_num > 0 and param_num <= 9:
+                    param_numbers.add(param_num)
+
+            # Create arguments for each found parameter
+            for param_num in sorted(param_numbers):
+                # Try to find description in comments
+                help_text = ""
+                help_pattern = rf'#.*?\${param_num}.*?-\s*(.+?)(?:\n|$)'
+                help_match = re.search(help_pattern, source_code)
+                if help_match:
+                    help_text = help_match.group(1).strip()
+
+                arguments.append(ArgumentInfo(
+                    name=f"arg{param_num}",
+                    required=False,
+                    type="str",
+                    help=help_text
+                ))
+
+        logger.debug(f"Extracted {len(arguments)} Shell parameters")
+        return arguments
+
     def _sanitize_source_text(self, source_code: str, script_path: Path) -> str:
         """
         Replace smart quotes, non-breaking spaces, and similar characters with

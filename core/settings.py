@@ -33,6 +33,12 @@ class SettingsManager(QObject):
         'execution': {
             'script_timeout_seconds': 30
         },
+        'interpreters': {
+            'powershell_path': None,  # Auto-detect if None
+            'bash_path': None,  # Auto-detect if None
+            'wsl_distro': 'Ubuntu',
+            'use_wsl': True  # Prefer WSL for shell scripts on Windows
+        },
         'system_hotkeys': {
             'show_menu': 'Alt+Space'
         },
@@ -565,9 +571,10 @@ class SettingsManager(QObject):
                 logger.debug(f"Path does not exist or is not a file: {path}")
                 return False
             
-            # Must be a Python file
-            if script_path.suffix.lower() != '.py':
-                logger.debug(f"Path is not a Python file: {path}")
+            # Must be a supported script file
+            supported_extensions = ['.py', '.ps1', '.bat', '.cmd', '.sh']
+            if script_path.suffix.lower() not in supported_extensions:
+                logger.debug(f"Path is not a supported script file: {path}")
                 return False
             
             # Basic security check - prevent directory traversal attempts

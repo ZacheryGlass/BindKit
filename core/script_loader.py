@@ -64,9 +64,13 @@ class ScriptLoader:
             self.scripts_directory.mkdir(parents=True, exist_ok=True)
             return scripts
         
-        script_files = list(self.scripts_directory.glob("*.py"))
-        logger.info(f"Found {len(script_files)} Python files in scripts directory")
-        
+        # Discover all supported script types
+        script_files = []
+        for pattern in ["*.py", "*.ps1", "*.bat", "*.cmd", "*.sh"]:
+            script_files.extend(self.scripts_directory.glob(pattern))
+
+        logger.info(f"Found {len(script_files)} script files in scripts directory")
+
         # Filter out files starting with "__"
         script_files = [f for f in script_files if not f.name.startswith("__")]
         
