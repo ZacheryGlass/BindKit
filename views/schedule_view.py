@@ -11,10 +11,11 @@ Provides interface for:
 import logging
 from typing import List, Optional, Dict
 from datetime import datetime
+from core.schedule_runtime import ScheduleRuntime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QPushButton,
     QSpinBox, QComboBox, QGroupBox, QMessageBox, QTableWidget,
-    QTableWidgetItem, QHeaderView, QAbstractItemView
+    QTableWidgetItem, QHeaderView, QAbstractItemView, QLineEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QColor, QBrush
@@ -35,6 +36,8 @@ class ScheduleView(QWidget):
 
     schedule_enabled_changed = pyqtSignal(str, bool)  # script_name, enabled
     schedule_interval_changed = pyqtSignal(str, int)  # script_name, interval_seconds
+    schedule_type_changed = pyqtSignal(str, str)  # script_name, schedule_type (interval/cron)
+    cron_expression_changed = pyqtSignal(str, str)  # script_name, cron_expression
     run_now_requested = pyqtSignal(str)  # script_name
     schedule_info_requested = pyqtSignal(str)  # script_name
 
@@ -47,6 +50,7 @@ class ScheduleView(QWidget):
         self._schedule_data: Dict[str, dict] = {}
         self._row_lookup: Dict[str, int] = {}
         self._next_run_timestamp: Optional[float] = None
+        self._current_schedule_type = "interval"  # Default schedule type
 
         # Timer for periodic refresh of "Next run" display
         self._refresh_timer = QTimer()
@@ -61,39 +65,97 @@ class ScheduleView(QWidget):
 
         # Schedule Controls at top
         controls_group = QGroupBox("Schedule Controls")
-        controls_layout = QHBoxLayout()
+        controls_layout = QVBoxLayout()
         controls_layout.setContentsMargins(8, 8, 8, 8)
+        controls_layout.setSpacing(8)
 
-        # Enable checkbox
+        # First row: Enable checkbox and Schedule type selection
+        top_row_layout = QHBoxLayout()
         self.schedule_enabled_checkbox = QCheckBox("Enable schedule")
         self.schedule_enabled_checkbox.stateChanged.connect(self._on_schedule_enabled_changed)
         self.schedule_enabled_checkbox.setEnabled(False)
-        controls_layout.addWidget(self.schedule_enabled_checkbox)
+        top_row_layout.addWidget(self.schedule_enabled_checkbox)
 
-        # Interval controls
-        controls_layout.addWidget(QLabel("Interval:"))
+        # Schedule type selection
+        top_row_layout.addWidget(QLabel("Schedule type:"))
+        self.schedule_type_combo = QComboBox()
+        self.schedule_type_combo.addItems(["Interval", "CRON"])
+        self.schedule_type_combo.currentTextChanged.connect(self._on_schedule_type_changed)
+        self.schedule_type_combo.setEnabled(False)
+        top_row_layout.addWidget(self.schedule_type_combo)
+
+        top_row_layout.addStretch()
+        controls_layout.addLayout(top_row_layout)
+
+        # Interval controls row (visible when Interval mode is selected)
+        interval_row_layout = QHBoxLayout()
+        interval_row_layout.addWidget(QLabel("Interval:"))
         self.interval_spinbox = QSpinBox()
         self.interval_spinbox.setMinimum(1)
         self.interval_spinbox.setMaximum(999999)
         self.interval_spinbox.setValue(60)
         self.interval_spinbox.valueChanged.connect(self._on_interval_changed)
         self.interval_spinbox.setEnabled(False)
-        controls_layout.addWidget(self.interval_spinbox)
+        interval_row_layout.addWidget(self.interval_spinbox)
 
         self.interval_unit_combo = QComboBox()
         self.interval_unit_combo.addItems(["seconds", "minutes", "hours", "days"])
         self.interval_unit_combo.setCurrentText("minutes")
         self.interval_unit_combo.currentTextChanged.connect(self._on_interval_unit_changed)
         self.interval_unit_combo.setEnabled(False)
-        controls_layout.addWidget(self.interval_unit_combo)
+        interval_row_layout.addWidget(self.interval_unit_combo)
+        interval_row_layout.addStretch()
+        self.interval_controls_widget = QWidget()
+        self.interval_controls_widget.setLayout(interval_row_layout)
+        controls_layout.addWidget(self.interval_controls_widget)
 
-        controls_layout.addStretch()
+        # CRON expression row (visible when CRON mode is selected)
+        cron_row_layout = QHBoxLayout()
+        cron_row_layout.addWidget(QLabel("CRON expression:"))
+        self.cron_input = QLineEdit()
+        self.cron_input.setPlaceholderText("e.g. 0 9 * * 1-5 (9 AM on weekdays)")
+        self.cron_input.setEnabled(False)
+        self.cron_input.editingFinished.connect(self._on_cron_expression_changed)
+        cron_row_layout.addWidget(self.cron_input)
+        self.cron_controls_widget = QWidget()
+        self.cron_controls_widget.setLayout(cron_row_layout)
+        controls_layout.addWidget(self.cron_controls_widget)
+        self.cron_controls_widget.setVisible(False)  # Initially hidden
 
-        # Run Now button
+        # CRON validation indicator row
+        validation_row_layout = QHBoxLayout()
+        validation_row_layout.addStretch()
+        self.cron_error_label = QLabel()
+        self.cron_error_label.setStyleSheet("color: #d9534f; font-size: 10px;")
+        validation_row_layout.addWidget(self.cron_error_label)
+        validation_row_layout.addStretch()
+        self.validation_indicator_widget = QWidget()
+        self.validation_indicator_widget.setLayout(validation_row_layout)
+        controls_layout.addWidget(self.validation_indicator_widget)
+        self.validation_indicator_widget.setVisible(False)
+
+        # Next runs preview row (for CRON mode)
+        preview_label = QLabel("Next 5 runs:")
+        preview_label.setStyleSheet("font-size: 10px; color: #666;")
+        controls_layout.addWidget(preview_label)
+        self.next_runs_label = QLabel("Not scheduled")
+        self.next_runs_label.setStyleSheet("font-size: 9px; color: #999; margin-left: 15px;")
+        controls_layout.addWidget(self.next_runs_label)
+        self.next_runs_preview_widget = QWidget()
+        next_runs_layout = QVBoxLayout()
+        next_runs_layout.addWidget(self.next_runs_label)
+        self.next_runs_preview_widget.setLayout(next_runs_layout)
+        controls_layout.addWidget(self.next_runs_preview_widget)
+        self.next_runs_preview_widget.setVisible(False)  # Initially hidden
+
+        # Run Now button row
+        button_row_layout = QHBoxLayout()
+        button_row_layout.addStretch()
         self.run_now_button = QPushButton("Run Now")
         self.run_now_button.clicked.connect(self._on_run_now_clicked)
         self.run_now_button.setEnabled(False)
-        controls_layout.addWidget(self.run_now_button)
+        button_row_layout.addWidget(self.run_now_button)
+        controls_layout.addLayout(button_row_layout)
 
         controls_group.setLayout(controls_layout)
         layout.addWidget(controls_group)
@@ -381,6 +443,43 @@ class ScheduleView(QWidget):
         logger.debug(f"Interval unit changed for {self.selected_script}: {interval_seconds}s")
         self.schedule_interval_changed.emit(self.selected_script, interval_seconds)
 
+    def _on_schedule_type_changed(self):
+        """Handle schedule type combo change."""
+        if not self.selected_script:
+            return
+
+        schedule_type = self.schedule_type_combo.currentText().lower()
+        self._current_schedule_type = schedule_type
+
+        # Update UI visibility based on schedule type
+        if schedule_type == "interval":
+            self.interval_controls_widget.setVisible(True)
+            self.cron_controls_widget.setVisible(False)
+            self.next_runs_preview_widget.setVisible(False)
+            self.validation_indicator_widget.setVisible(False)
+        elif schedule_type == "cron":
+            self.interval_controls_widget.setVisible(False)
+            self.cron_controls_widget.setVisible(True)
+            self.next_runs_preview_widget.setVisible(True)
+            self.validation_indicator_widget.setVisible(True)
+
+        logger.debug(f"Schedule type changed for {self.selected_script}: {schedule_type}")
+        self.schedule_type_changed.emit(self.selected_script, schedule_type)
+
+    def _on_cron_expression_changed(self):
+        """Handle CRON expression change."""
+        if not self.selected_script:
+            return
+
+        cron_expr = self.cron_input.text().strip()
+        if not cron_expr:
+            self.cron_error_label.setText("CRON expression cannot be empty")
+            self.next_runs_label.setText("Not scheduled")
+            return
+
+        logger.debug(f"CRON expression changed for {self.selected_script}: {cron_expr}")
+        self.cron_expression_changed.emit(self.selected_script, cron_expr)
+
     def _on_run_now_clicked(self):
         """Handle Run Now button click."""
         if not self.selected_script:
@@ -457,8 +556,60 @@ class ScheduleView(QWidget):
 
         if script_name == self.selected_script:
             self.set_schedule_enabled(schedule_info.get('enabled', False))
-            self.set_interval(schedule_info.get('interval_seconds', 3600))
+
+            # Update based on schedule type
+            schedule_type = schedule_info.get('schedule_type', 'interval')
+            self._current_schedule_type = schedule_type
+
+            self.schedule_type_combo.blockSignals(True)
+            self.schedule_type_combo.setCurrentText(
+                "Interval" if schedule_type == 'interval' else "CRON"
+            )
+            self.schedule_type_combo.blockSignals(False)
+
+            if schedule_type == 'interval':
+                self.set_interval(schedule_info.get('interval_seconds', 3600))
+                self.interval_controls_widget.setVisible(True)
+                self.cron_controls_widget.setVisible(False)
+                self.next_runs_preview_widget.setVisible(False)
+                self.validation_indicator_widget.setVisible(False)
+            elif schedule_type == 'cron':
+                cron_expr = schedule_info.get('cron_expression', '')
+                self.cron_input.blockSignals(True)
+                self.cron_input.setText(cron_expr or '')
+                self.cron_input.blockSignals(False)
+                self.interval_controls_widget.setVisible(False)
+                self.cron_controls_widget.setVisible(True)
+                self.next_runs_preview_widget.setVisible(True)
+                self.validation_indicator_widget.setVisible(True)
+                # Clear validation errors
+                self.cron_error_label.setText('')
+
             self._next_run_timestamp = schedule_info.get('next_run')
+
+    def set_cron_validation_result(self, script_name: str, is_valid: bool, error_msg: Optional[str] = None, next_runs: Optional[List[str]] = None):
+        """
+        Set the validation result for a CRON expression.
+
+        Args:
+            script_name: Name of the script
+            is_valid: Whether the CRON expression is valid
+            error_msg: Error message if invalid
+            next_runs: List of formatted next run times (for valid expressions)
+        """
+        if script_name != self.selected_script:
+            return
+
+        if is_valid:
+            self.cron_error_label.setText('')
+            if next_runs:
+                next_runs_text = '\n'.join(next_runs)
+                self.next_runs_label.setText(next_runs_text)
+            else:
+                self.next_runs_label.setText("Valid expression")
+        else:
+            self.cron_error_label.setText(f"Invalid CRON: {error_msg}" if error_msg else "Invalid CRON expression")
+            self.next_runs_label.setText('')
 
     def clear_data(self):
         """Clear all schedule data and UI state to prevent memory leaks."""

@@ -275,6 +275,41 @@ class ScriptController(QObject):
             logger.error(f"Failed to stop schedule for {script_name}: {result.error}")
             return False
 
+    def start_cron_schedule(self, script_name: str, cron_expression: str, arguments: Optional[Dict[str, Any]] = None) -> bool:
+        """Start CRON-based scheduled execution for a script.
+
+        Args:
+            script_name: Name of the script (display name or original name)
+            cron_expression: CRON expression (5-field format)
+            arguments: Optional script arguments
+
+        Returns:
+            True if schedule started successfully, False otherwise
+        """
+        logger.info(f"CRON schedule start requested: {script_name} (expression: {cron_expression})")
+
+        script_info = self._script_collection.get_script_by_name(script_name)
+        if not script_info:
+            logger.error(f"Script not found for scheduling: {script_name}")
+            return False
+
+        # Get the script executor from the script execution model
+        executor = self._script_execution._script_loader.executor
+        if not executor:
+            logger.error("Script executor not available")
+            return False
+
+        # Start the CRON schedule
+        result = executor.start_cron_scheduled_execution(script_info, cron_expression, arguments)
+
+        if result.success:
+            logger.info(f"CRON schedule started for {script_name}")
+            self.script_status_updated.emit(script_name, "Scheduled")
+            return True
+        else:
+            logger.error(f"Failed to start CRON schedule for {script_name}: {result.error}")
+            return False
+
     def is_schedule_running(self, script_name: str) -> bool:
         """Check if a script has an active schedule.
 

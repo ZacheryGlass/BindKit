@@ -865,6 +865,74 @@ class ScriptExecutor:
                 error=f"Error stopping schedule: {str(e)}"
             )
 
+    def start_cron_scheduled_execution(self, script_info: ScriptInfo, cron_expression: str, arguments: Optional[Dict[str, Any]] = None) -> ExecutionResult:
+        """Start CRON-based scheduled execution of a script.
+
+        Args:
+            script_info: ScriptInfo for the script
+            cron_expression: CRON expression (5-field format)
+            arguments: Optional script arguments
+
+        Returns:
+            ExecutionResult indicating success or failure
+        """
+        try:
+            from core.schedule_runtime import ScheduleType
+
+            script_name = script_info.file_path.stem
+
+            # Validate CRON expression
+            from core.schedule_runtime import ScheduleRuntime
+            is_valid, error_msg = ScheduleRuntime.validate_cron_expression(cron_expression)
+            if not is_valid:
+                return ExecutionResult(
+                    success=False,
+                    error=f"Invalid CRON expression: {error_msg}"
+                )
+
+            # Check if schedule already exists
+            if self.schedule_runtime.is_scheduled(script_name):
+                return ExecutionResult(
+                    success=False,
+                    error=f"Schedule for '{script_name}' is already active"
+                )
+
+            # Create execution callback
+            def execution_callback(name: str, _script_info=script_info, _args=dict(arguments or {})):
+                """Called when CRON schedule fires."""
+                result = self.execute_script(_script_info, _args)
+                if result.success:
+                    logger.info(f"CRON scheduled execution of '{name}' completed successfully")
+                else:
+                    logger.warning(f"CRON scheduled execution of '{name}' failed: {result.error}")
+
+            # Start the CRON schedule
+            handle = self.schedule_runtime.start_schedule(
+                script_name,
+                script_info.file_path,
+                execution_callback,
+                self.settings,
+                schedule_type=ScheduleType.CRON,
+                cron_expression=cron_expression
+            )
+
+            return ExecutionResult(
+                success=True,
+                message=f"CRON schedule started for '{script_name}' (expression: {cron_expression})",
+                data={
+                    'script_name': script_name,
+                    'cron_expression': cron_expression,
+                    'next_run': handle.next_run
+                }
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to start CRON schedule: {e}")
+            return ExecutionResult(
+                success=False,
+                error=f"Failed to start CRON schedule: {str(e)}"
+            )
+
     def is_schedule_running(self, script_name: str) -> bool:
         """Check if a script has an active schedule.
 

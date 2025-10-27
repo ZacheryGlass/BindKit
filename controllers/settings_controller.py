@@ -845,6 +845,125 @@ class SettingsController(QObject):
             self.error_occurred.emit("Schedule Error", f"Failed to set interval: {str(e)}")
             return False
 
+    def set_schedule_type(self, script_name: str, schedule_type: str) -> bool:
+        """Set the schedule type (interval or cron) for a script.
+
+        Args:
+            script_name: Name of the script (display name or original name)
+            schedule_type: Type of schedule ('interval' or 'cron')
+
+        Returns:
+            True if successful, False otherwise
+        """
+        logger.info(f"Setting schedule type for {script_name}: {schedule_type}")
+
+        try:
+            if schedule_type not in ('interval', 'cron'):
+                raise ValueError(f"Invalid schedule type: {schedule_type}")
+
+            script_info = self._script_collection.get_script_by_name(script_name)
+            if not script_info:
+                logger.error(f"Script not found: {script_name}")
+                return False
+
+            script_stem = script_info.file_path.stem
+
+            # Update schedule type in settings
+            self._settings_manager.set_schedule_type(script_stem, schedule_type)
+
+            # If schedule is currently running, we need to restart it with the new type
+            executor = self._script_execution._script_loader.executor
+            if executor and executor.is_schedule_running(script_stem):
+                # Stop the current schedule
+                executor.schedule_runtime.stop_schedule(script_stem)
+
+                # Restart with new type
+                if schedule_type == 'interval':
+                    interval_seconds = self._settings_manager.get_schedule_interval(script_stem)
+                    self._script_controller.start_schedule(script_name, interval_seconds)
+                elif schedule_type == 'cron':
+                    cron_expression = self._settings_manager.get_cron_expression(script_stem)
+                    if cron_expression:
+                        self._script_controller.start_cron_schedule(script_name, cron_expression)
+
+                logger.info(f"Restarted schedule for {script_name} with type: {schedule_type}")
+
+            self._notify_schedule_view(script_name, script_stem=script_stem)
+            return True
+
+        except Exception as e:
+            logger.error(f"Error setting schedule type for {script_name}: {e}")
+            self.error_occurred.emit("Schedule Error", f"Failed to set schedule type: {str(e)}")
+            return False
+
+    def set_cron_expression(self, script_name: str, cron_expression: str) -> bool:
+        """Set the CRON expression for a scheduled script.
+
+        Args:
+            script_name: Name of the script (display name or original name)
+            cron_expression: CRON expression (5-field format)
+
+        Returns:
+            True if successful, False otherwise
+        """
+        logger.info(f"Setting CRON expression for {script_name}: {cron_expression}")
+
+        try:
+            # Validate CRON expression
+            from core.schedule_runtime import ScheduleRuntime
+            is_valid, error_msg = ScheduleRuntime.validate_cron_expression(cron_expression)
+
+            script_info = self._script_collection.get_script_by_name(script_name)
+            if not script_info:
+                logger.error(f"Script not found: {script_name}")
+                return False
+
+            script_stem = script_info.file_path.stem
+
+            # Update CRON expression in settings
+            self._settings_manager.set_cron_expression(script_stem, cron_expression)
+
+            # Show validation result in UI
+            if not is_valid:
+                if self._settings_view:
+                    self._settings_view.set_cron_validation_result(
+                        script_stem, False, error_msg
+                    )
+                logger.warning(f"Invalid CRON expression for {script_name}: {error_msg}")
+                return False
+
+            # Get next run previews for valid expressions
+            next_runs = ScheduleRuntime.get_cron_next_runs(cron_expression, count=5)
+            from datetime import datetime
+            formatted_runs = [
+                datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+                for ts in next_runs
+            ]
+
+            # Show validation result with next runs
+            if self._settings_view:
+                self._settings_view.set_cron_validation_result(
+                    script_stem, True, next_runs=formatted_runs
+                )
+
+            # If schedule is currently running and in CRON mode, update it
+            executor = self._script_execution._script_loader.executor
+            if executor and executor.is_schedule_running(script_stem):
+                schedule_type = self._settings_manager.get_schedule_type(script_stem)
+                if schedule_type == 'cron':
+                    executor.schedule_runtime.update_cron_expression(script_stem, cron_expression)
+                    logger.info(f"Updated running CRON schedule for {script_name}")
+
+            self._notify_schedule_view(script_name, script_stem=script_stem)
+            return True
+
+        except Exception as e:
+            logger.error(f"Error setting CRON expression for {script_name}: {e}")
+            if self._settings_view:
+                self._settings_view.set_cron_validation_result(script_name, False, str(e))
+            self.error_occurred.emit("CRON Error", f"Failed to set CRON expression: {str(e)}")
+            return False
+
     def run_scheduled_script_now(self, script_name: str) -> bool:
         """Manually trigger a scheduled script to run immediately.
 
@@ -939,8 +1058,10 @@ class SettingsController(QObject):
             return {
                 'enabled': runtime_enabled,
                 'configured_enabled': config_enabled,
+                'schedule_type': config.get('schedule_type', 'interval'),
                 'interval_seconds': interval_seconds,
                 'interval_display': interval_display,
+                'cron_expression': config.get('cron_expression'),
                 'last_run': last_run,
                 'last_run_display': last_run_display,
                 'next_run': next_run,

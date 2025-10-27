@@ -74,7 +74,7 @@ class SettingsManager(QObject):
         },
         'schedule_config': {
             # Schedule configuration will be stored as 'schedule_config/ScriptName/*'
-            # Fields: enabled, interval_seconds, last_run, next_run
+            # Fields: enabled, schedule_type (interval/cron), interval_seconds, cron_expression, last_run, next_run
             # This is just a placeholder for the schema
         }
     }
@@ -756,11 +756,13 @@ class SettingsManager(QObject):
         """Get complete schedule configuration for a script.
 
         Returns:
-            Dictionary with keys: enabled, interval_seconds, last_run, next_run
+            Dictionary with keys: enabled, schedule_type, interval_seconds, cron_expression, last_run, next_run
         """
         return {
             'enabled': self.is_script_scheduled(script_name),
+            'schedule_type': self.get_schedule_type(script_name),
             'interval_seconds': self.get_schedule_interval(script_name),
+            'cron_expression': self.get_cron_expression(script_name),
             'last_run': self.get_schedule_last_run(script_name),
             'next_run': self.get_schedule_next_run(script_name)
         }
@@ -770,6 +772,32 @@ class SettingsManager(QObject):
         for key, value in config.items():
             self.set(f'schedule_config/{script_name}/{key}', value)
         logger.info(f"Updated schedule config for '{script_name}': {config}")
+
+    def get_schedule_type(self, script_name: str) -> str:
+        """Get the schedule type (interval or cron) for a script's schedule."""
+        return self.get(f'schedule_config/{script_name}/schedule_type', 'interval')
+
+    def set_schedule_type(self, script_name: str, schedule_type: str) -> None:
+        """Set the schedule type (interval or cron) for a script's schedule."""
+        # Validate schedule type
+        if schedule_type not in ('interval', 'cron'):
+            raise ValueError(f"Invalid schedule type: {schedule_type}")
+        self.set(f'schedule_config/{script_name}/schedule_type', schedule_type)
+
+    def get_cron_expression(self, script_name: str) -> Optional[str]:
+        """Get the CRON expression for a script's schedule."""
+        return self.get(f'schedule_config/{script_name}/cron_expression', None)
+
+    def set_cron_expression(self, script_name: str, cron_expression: Optional[str]) -> None:
+        """Set the CRON expression for a script's schedule."""
+        if cron_expression is None:
+            # Remove the CRON expression if setting to None
+            key = f'schedule_config/{script_name}/cron_expression'
+            if self.settings.contains(key):
+                self.settings.remove(key)
+                self.settings.sync()
+        else:
+            self.set(f'schedule_config/{script_name}/cron_expression', cron_expression)
 
     def set_schedule_interval(self, script_name: str, interval_seconds: int) -> None:
         """Set the interval for a script's schedule."""

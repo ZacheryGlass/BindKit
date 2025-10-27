@@ -12,11 +12,13 @@ Features:
 import logging
 import time
 from pathlib import Path
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, List, Tuple
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
 from PyQt6.QtCore import QTimer, QObject, pyqtSignal
+from croniter import croniter
+from datetime import datetime
 
 logger = logging.getLogger('Core.ScheduleRuntime')
 
@@ -35,13 +37,21 @@ class ScheduleState(Enum):
     ERROR = "error"
 
 
+class ScheduleType(Enum):
+    """Schedule execution types"""
+    INTERVAL = "interval"
+    CRON = "cron"
+
+
 @dataclass
 class ScheduleHandle:
     """Tracks a scheduled script execution"""
     script_name: str
     script_path: Path
-    interval_seconds: int
+    schedule_type: ScheduleType
     timer: QTimer
+    interval_seconds: Optional[int] = None  # For INTERVAL type
+    cron_expression: Optional[str] = None  # For CRON type
     last_run: Optional[float] = None
     next_run: Optional[float] = None
     is_executing: bool = False
@@ -78,13 +88,71 @@ class ScheduleRuntime(QObject):
 
         logger.info("ScheduleRuntime initialized")
 
+    @staticmethod
+    def validate_cron_expression(cron_expr: str) -> Tuple[bool, Optional[str]]:
+        """
+        Validate a CRON expression.
+
+        Args:
+            cron_expr: The CRON expression to validate
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        try:
+            croniter(cron_expr)
+            return True, None
+        except Exception as e:
+            return False, str(e)
+
+    @staticmethod
+    def get_cron_next_runs(cron_expr: str, count: int = 5) -> List[float]:
+        """
+        Get the next N run times for a CRON expression.
+
+        Args:
+            cron_expr: The CRON expression
+            count: Number of future run times to return
+
+        Returns:
+            List of timestamps for the next runs
+        """
+        try:
+            cron = croniter(cron_expr, datetime.now())
+            return [cron.get_next(float) for _ in range(count)]
+        except Exception as e:
+            logger.error(f"Error calculating CRON next runs: {e}")
+            return []
+
+    @staticmethod
+    def _calculate_cron_delay_to_next_run(cron_expr: str) -> int:
+        """
+        Calculate delay in seconds until the next CRON run.
+
+        Args:
+            cron_expr: The CRON expression
+
+        Returns:
+            Delay in seconds (minimum 1 second to avoid negative delays)
+        """
+        try:
+            cron = croniter(cron_expr, datetime.now())
+            next_run_timestamp = cron.get_next(float)
+            delay_seconds = int(next_run_timestamp - time.time())
+            return max(1, delay_seconds)  # Ensure at least 1 second delay
+        except Exception as e:
+            logger.error(f"Error calculating CRON delay: {e}")
+            return 60  # Default to 60 seconds on error
+
     def start_schedule(
         self,
         script_name: str,
         script_path: Path,
-        interval_seconds: int,
         execution_callback: Callable,
-        settings_manager=None
+        settings_manager=None,
+        schedule_type: ScheduleType = ScheduleType.INTERVAL,
+        interval_seconds: Optional[int] = None,
+        cron_expression: Optional[str] = None
     ) -> ScheduleHandle:
         """
         Start a scheduled execution for a script.
@@ -92,42 +160,60 @@ class ScheduleRuntime(QObject):
         Args:
             script_name: Name of the script (used for tracking)
             script_path: Path to the script file
-            interval_seconds: Interval between executions in seconds
             execution_callback: Function to call when schedule fires
             settings_manager: SettingsManager for updating timestamps
+            schedule_type: Type of schedule (INTERVAL or CRON)
+            interval_seconds: Interval between executions in seconds (for INTERVAL type)
+            cron_expression: CRON expression (for CRON type)
 
         Returns:
             ScheduleHandle for the scheduled script
 
         Raises:
             RuntimeError: If schedule already exists for this script
-            ValueError: If interval is outside valid range (10s to ~24.8 days)
+            ValueError: If parameters are invalid for the schedule type
         """
-        # Validate interval bounds
-        if interval_seconds < MIN_INTERVAL_SECONDS:
-            raise ValueError(
-                f"Interval must be at least {MIN_INTERVAL_SECONDS} seconds, got {interval_seconds}s"
-            )
+        # Validate based on schedule type
+        if schedule_type == ScheduleType.INTERVAL:
+            if interval_seconds is None:
+                raise ValueError("interval_seconds is required for INTERVAL schedule type")
+            if interval_seconds < MIN_INTERVAL_SECONDS:
+                raise ValueError(
+                    f"Interval must be at least {MIN_INTERVAL_SECONDS} seconds, got {interval_seconds}s"
+                )
+            if interval_seconds > MAX_TIMER_INTERVAL_SECONDS:
+                raise ValueError(
+                    f"Interval {interval_seconds}s exceeds maximum of {MAX_TIMER_INTERVAL_SECONDS}s (~24.8 days)"
+                )
+            logger.info(f"Starting INTERVAL schedule for '{script_name}' (interval: {interval_seconds}s)")
+            timer_delay_ms = interval_seconds * 1000
+            next_run = time.time() + interval_seconds
 
-        if interval_seconds > MAX_TIMER_INTERVAL_SECONDS:
-            raise ValueError(
-                f"Interval {interval_seconds}s exceeds maximum of {MAX_TIMER_INTERVAL_SECONDS}s (~24.8 days)"
-            )
+        elif schedule_type == ScheduleType.CRON:
+            if not cron_expression:
+                raise ValueError("cron_expression is required for CRON schedule type")
+            # Validate CRON expression
+            is_valid, error_msg = self.validate_cron_expression(cron_expression)
+            if not is_valid:
+                raise ValueError(f"Invalid CRON expression: {error_msg}")
+            logger.info(f"Starting CRON schedule for '{script_name}' (expression: {cron_expression})")
+            timer_delay_ms = self._calculate_cron_delay_to_next_run(cron_expression) * 1000
+            next_run = time.time() + (timer_delay_ms / 1000)
 
-        logger.info(f"Starting schedule for '{script_name}' (interval: {interval_seconds}s)")
+        else:
+            raise ValueError(f"Unknown schedule type: {schedule_type}")
 
         # Create timer
         timer = QTimer()
         timer.setSingleShot(False)  # Repeating timer
 
-        # Calculate next run time
-        next_run = time.time() + interval_seconds
-
         # Create schedule handle
         handle = ScheduleHandle(
             script_name=script_name,
             script_path=script_path,
+            schedule_type=schedule_type,
             interval_seconds=interval_seconds,
+            cron_expression=cron_expression,
             timer=timer,
             next_run=next_run,
             execution_callback=execution_callback,
@@ -148,8 +234,8 @@ class ScheduleRuntime(QObject):
 
         # Start timer and emit signal with cleanup on failure
         try:
-            timer.start(interval_seconds * 1000)  # QTimer uses milliseconds
-            logger.info(f"Schedule for '{script_name}' started (next run in {interval_seconds}s)")
+            timer.start(int(timer_delay_ms))  # QTimer uses milliseconds
+            logger.info(f"Schedule for '{script_name}' started ({schedule_type.value}, next run in {timer_delay_ms/1000:.0f}s)")
             self.schedule_started.emit(script_name)
         except Exception as e:
             # Clean up on failure: remove handle and disconnect signals
@@ -223,7 +309,7 @@ class ScheduleRuntime(QObject):
 
     def update_interval(self, script_name: str, new_interval_seconds: int) -> bool:
         """
-        Update the interval for a scheduled script.
+        Update the interval for a scheduled script (INTERVAL type only).
 
         Args:
             script_name: Name of the script
@@ -239,6 +325,10 @@ class ScheduleRuntime(QObject):
             logger.warning(f"Schedule for '{script_name}' not found")
             return False
 
+        handle = self._active_schedules[script_name]
+        if handle.schedule_type != ScheduleType.INTERVAL:
+            raise ValueError(f"Schedule for '{script_name}' is not an INTERVAL schedule")
+
         # Validate interval bounds
         if new_interval_seconds < MIN_INTERVAL_SECONDS:
             raise ValueError(
@@ -250,7 +340,6 @@ class ScheduleRuntime(QObject):
                 f"Interval {new_interval_seconds}s exceeds maximum of {MAX_TIMER_INTERVAL_SECONDS}s (~24.8 days)"
             )
 
-        handle = self._active_schedules[script_name]
         old_interval = handle.interval_seconds
         handle.interval_seconds = new_interval_seconds
 
@@ -262,6 +351,48 @@ class ScheduleRuntime(QObject):
         handle.next_run = time.time() + new_interval_seconds
 
         logger.info(f"Updated interval for '{script_name}': {old_interval}s -> {new_interval_seconds}s")
+
+        return True
+
+    def update_cron_expression(self, script_name: str, new_cron_expression: str) -> bool:
+        """
+        Update the CRON expression for a scheduled script (CRON type only).
+
+        Args:
+            script_name: Name of the script
+            new_cron_expression: New CRON expression
+
+        Returns:
+            True if successful, False if schedule not found
+
+        Raises:
+            ValueError: If CRON expression is invalid
+        """
+        if script_name not in self._active_schedules:
+            logger.warning(f"Schedule for '{script_name}' not found")
+            return False
+
+        handle = self._active_schedules[script_name]
+        if handle.schedule_type != ScheduleType.CRON:
+            raise ValueError(f"Schedule for '{script_name}' is not a CRON schedule")
+
+        # Validate CRON expression
+        is_valid, error_msg = self.validate_cron_expression(new_cron_expression)
+        if not is_valid:
+            raise ValueError(f"Invalid CRON expression: {error_msg}")
+
+        old_cron = handle.cron_expression
+        handle.cron_expression = new_cron_expression
+
+        # Recalculate delay and restart timer
+        delay_seconds = self._calculate_cron_delay_to_next_run(new_cron_expression)
+        handle.timer.stop()
+        handle.timer.start(delay_seconds * 1000)
+
+        # Recalculate next run
+        handle.next_run = time.time() + delay_seconds
+
+        logger.info(f"Updated CRON for '{script_name}': {old_cron} -> {new_cron_expression}")
 
         return True
 
@@ -321,7 +452,18 @@ class ScheduleRuntime(QObject):
         try:
             # Update timestamps
             handle.last_run = current_time
-            handle.next_run = current_time + handle.interval_seconds
+
+            # Calculate next run based on schedule type
+            if handle.schedule_type == ScheduleType.INTERVAL:
+                handle.next_run = current_time + handle.interval_seconds
+            elif handle.schedule_type == ScheduleType.CRON:
+                # Recalculate next run from now for CRON
+                next_runs = self.get_cron_next_runs(handle.cron_expression, count=1)
+                if next_runs:
+                    handle.next_run = next_runs[0]
+                else:
+                    # Fallback if calculation fails
+                    handle.next_run = current_time + 60
 
             # Update settings if available
             if settings_manager:
@@ -373,11 +515,19 @@ class ScheduleRuntime(QObject):
         if not handle:
             return None
 
-        return {
+        info = {
             'script_name': handle.script_name,
-            'interval_seconds': handle.interval_seconds,
+            'schedule_type': handle.schedule_type.value,
             'last_run': handle.last_run,
             'next_run': handle.next_run,
             'is_executing': handle.is_executing,
             'state': handle.state.value
         }
+
+        # Add type-specific info
+        if handle.schedule_type == ScheduleType.INTERVAL:
+            info['interval_seconds'] = handle.interval_seconds
+        elif handle.schedule_type == ScheduleType.CRON:
+            info['cron_expression'] = handle.cron_expression
+
+        return info

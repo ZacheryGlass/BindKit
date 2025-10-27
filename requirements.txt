@@ -12,3 +12,5 @@ psutil>=5.9.0
 requests>=2.31.0
 # PyInstaller for building executables (pinned to avoid DLL loading issues)
 pyinstaller>=6.10.0,<7.0.0
+# CRON expression parsing for schedule syntax
+croniter>=2.0.0

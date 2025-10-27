@@ -18,10 +18,12 @@ from core.schedule_runtime import (
     ScheduleRuntime,
     ScheduleState,
     ScheduleHandle,
+    ScheduleType,
     MIN_INTERVAL_SECONDS,
     MAX_TIMER_INTERVAL_SECONDS
 )
 from tests.test_utilities import wait_for_condition
+from datetime import datetime
 
 
 class TestScheduleRuntime:
@@ -519,6 +521,173 @@ class TestScheduleRuntime:
             # Manually stop all
             for i in range(5):
                 runtime.stop_schedule(f"StopAll{i}")
+
+
+class TestCRONScheduling:
+    """Test cases for CRON scheduling"""
+
+    @pytest.fixture
+    def runtime(self, qapp):
+        """Create a ScheduleRuntime instance for testing"""
+        return ScheduleRuntime()
+
+    @pytest.fixture
+    def mock_callback(self):
+        """Create a mock callback function"""
+        return Mock(return_value=None)
+
+    @pytest.fixture
+    def temp_script_path(self, temp_scripts_dir):
+        """Create a temporary script path"""
+        script_path = temp_scripts_dir / "cron_test.py"
+        script_path.write_text('print("cron scheduled")')
+        return script_path
+
+    def test_validate_cron_valid(self):
+        """Test validating a valid CRON expression"""
+        is_valid, error = ScheduleRuntime.validate_cron_expression("0 9 * * 1-5")
+        assert is_valid is True
+        assert error is None
+
+    def test_validate_cron_invalid(self):
+        """Test validating an invalid CRON expression"""
+        is_valid, error = ScheduleRuntime.validate_cron_expression("invalid cron")
+        assert is_valid is False
+        assert error is not None
+
+    def test_validate_cron_empty(self):
+        """Test validating an empty CRON expression"""
+        is_valid, error = ScheduleRuntime.validate_cron_expression("")
+        assert is_valid is False
+        assert error is not None
+
+    def test_get_cron_next_runs(self):
+        """Test getting next run times for CRON expression"""
+        # Use a CRON that runs every minute
+        next_runs = ScheduleRuntime.get_cron_next_runs("* * * * *", count=5)
+        assert len(next_runs) == 5
+        # All should be timestamps
+        for ts in next_runs:
+            assert isinstance(ts, float)
+            assert ts > time.time()
+
+    def test_start_cron_schedule(self, runtime, temp_script_path, mock_callback):
+        """Test starting a CRON schedule"""
+        handle = runtime.start_schedule(
+            script_name="CRONTest",
+            script_path=temp_script_path,
+            execution_callback=mock_callback,
+            schedule_type=ScheduleType.CRON,
+            cron_expression="0 9 * * 1-5"  # 9 AM on weekdays
+        )
+
+        assert handle is not None
+        assert handle.script_name == "CRONTest"
+        assert handle.schedule_type == ScheduleType.CRON
+        assert handle.cron_expression == "0 9 * * 1-5"
+        assert runtime.is_scheduled("CRONTest")
+        runtime.stop_schedule("CRONTest")
+
+    def test_start_cron_schedule_invalid_expr(self, runtime, temp_script_path, mock_callback):
+        """Test starting a CRON schedule with invalid expression"""
+        with pytest.raises(ValueError):
+            runtime.start_schedule(
+                script_name="InvalidCRON",
+                script_path=temp_script_path,
+                execution_callback=mock_callback,
+                schedule_type=ScheduleType.CRON,
+                cron_expression="invalid"
+            )
+
+    def test_cron_schedule_info(self, runtime, temp_script_path, mock_callback):
+        """Test getting CRON schedule info"""
+        runtime.start_schedule(
+            script_name="CRONInfo",
+            script_path=temp_script_path,
+            execution_callback=mock_callback,
+            schedule_type=ScheduleType.CRON,
+            cron_expression="*/15 * * * *"  # Every 15 minutes
+        )
+
+        info = runtime.get_schedule_info("CRONInfo")
+        assert info is not None
+        assert info['schedule_type'] == 'cron'
+        assert info['cron_expression'] == "*/15 * * * *"
+        assert 'next_run' in info
+
+        runtime.stop_schedule("CRONInfo")
+
+    def test_update_cron_expression(self, runtime, temp_script_path, mock_callback):
+        """Test updating CRON expression for running schedule"""
+        runtime.start_schedule(
+            script_name="UpdateCRON",
+            script_path=temp_script_path,
+            execution_callback=mock_callback,
+            schedule_type=ScheduleType.CRON,
+            cron_expression="0 9 * * *"
+        )
+
+        # Update the CRON expression
+        success = runtime.update_cron_expression("UpdateCRON", "0 10 * * *")
+        assert success is True
+
+        handle = runtime.get_schedule_handle("UpdateCRON")
+        assert handle.cron_expression == "0 10 * * *"
+
+        runtime.stop_schedule("UpdateCRON")
+
+    def test_cron_schedule_overlap_prevention(self, runtime, temp_script_path):
+        """Test that CRON schedules prevent overlap like interval schedules"""
+        call_count = [0]
+
+        def callback_with_delay(name: str):
+            """Callback that simulates slow execution"""
+            call_count[0] += 1
+            time.sleep(0.5)
+
+        # Use fast CRON for testing (every second)
+        runtime.start_schedule(
+            script_name="CRONOverlap",
+            script_path=temp_script_path,
+            execution_callback=callback_with_delay,
+            schedule_type=ScheduleType.CRON,
+            cron_expression="* * * * * *"  # Every second (6-field CRON with seconds)
+        )
+
+        # Give it time to execute
+        time.sleep(1.5)
+
+        # Should not exceed multiple calls due to overlap prevention
+        runtime.stop_schedule("CRONOverlap")
+
+    def test_interval_vs_cron_schedules(self, runtime, temp_script_path, mock_callback):
+        """Test that both interval and CRON schedules can be managed"""
+        # Start interval schedule
+        handle1 = runtime.start_schedule(
+            script_name="IntervalScript",
+            script_path=temp_script_path,
+            execution_callback=mock_callback,
+            schedule_type=ScheduleType.INTERVAL,
+            interval_seconds=60
+        )
+        assert handle1.schedule_type == ScheduleType.INTERVAL
+
+        # Start CRON schedule
+        handle2 = runtime.start_schedule(
+            script_name="CRONScript",
+            script_path=temp_script_path,
+            execution_callback=mock_callback,
+            schedule_type=ScheduleType.CRON,
+            cron_expression="0 * * * *"
+        )
+        assert handle2.schedule_type == ScheduleType.CRON
+
+        # Both should be scheduled
+        assert runtime.is_scheduled("IntervalScript")
+        assert runtime.is_scheduled("CRONScript")
+
+        runtime.stop_schedule("IntervalScript")
+        runtime.stop_schedule("CRONScript")
 
 
 if __name__ == '__main__':
