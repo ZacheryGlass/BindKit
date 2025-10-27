@@ -354,7 +354,7 @@ class SettingsController(QObject):
     def add_external_script(self, file_path: str) -> bool:
         """Add an external script"""
         logger.info(f"Adding external script: {file_path}")
-        
+
         try:
             # Validate file
             path = Path(file_path)
@@ -363,7 +363,41 @@ class SettingsController(QObject):
                     "Invalid File",
                     "Please select a valid Python (.py) file"
                 )
-        return False
+                return False
+
+            # Generate script name from file
+            script_name = path.stem.replace('_', ' ').title()
+
+            # Check for duplicates
+            existing_scripts = self._script_collection.get_all_scripts()
+            for script in existing_scripts:
+                if script.display_name == script_name:
+                    self.error_occurred.emit(
+                        "Duplicate Script",
+                        f"A script named '{script_name}' already exists"
+                    )
+                    return False
+
+            # Add the script
+            success = self._script_controller.add_external_script(script_name, str(path))
+
+            if success:
+                # Update the script list to reflect the new external script
+                # This will be properly forwarded to the view via script_list_updated signal
+                self._update_script_list()
+                logger.info(f"Successfully added external script: {script_name}")
+            else:
+                self.error_occurred.emit(
+                    "Add Failed",
+                    f"Failed to add external script: {script_name}"
+                )
+
+            return success
+
+        except Exception as e:
+            logger.error(f"Error adding external script: {e}")
+            self.error_occurred.emit("Add Error", f"Failed to add script: {str(e)}")
+            return False
 
     # Appearance settings methods
     def set_theme(self, theme_name: str):
@@ -392,40 +426,6 @@ class SettingsController(QObject):
         except Exception as e:
             logger.error(f"Error setting follow system theme: {e}")
             self.error_occurred.emit("Appearance Error", f"Failed to update appearance: {str(e)}")
-            
-            # Generate script name from file
-            script_name = path.stem.replace('_', ' ').title()
-            
-            # Check for duplicates
-            existing_scripts = self._script_collection.get_all_scripts()
-            for script in existing_scripts:
-                if script.display_name == script_name:
-                    self.error_occurred.emit(
-                        "Duplicate Script",
-                        f"A script named '{script_name}' already exists"
-                    )
-                    return False
-            
-            # Add the script
-            success = self._script_controller.add_external_script(script_name, str(path))
-
-            if success:
-                # Update the script list to reflect the new external script
-                # This will be properly forwarded to the view via script_list_updated signal
-                self._update_script_list()
-                logger.info(f"Successfully added external script: {script_name}")
-            else:
-                self.error_occurred.emit(
-                    "Add Failed",
-                    f"Failed to add external script: {script_name}"
-                )
-
-            return success
-            
-        except Exception as e:
-            logger.error(f"Error adding external script: {e}")
-            self.error_occurred.emit("Add Error", f"Failed to add script: {str(e)}")
-            return False
     
     def remove_external_script(self, script_name: str):
         """Remove an external script"""
