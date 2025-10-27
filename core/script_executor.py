@@ -7,6 +7,7 @@ import time
 import weakref
 import gc
 import os
+import threading
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
@@ -46,95 +47,99 @@ class ScriptExecutor:
 
         logger.info("ScriptExecutor initialized with ServiceRuntime and ScheduleRuntime support")
 
-        # Cache for detected interpreters
+        # Cache for detected interpreters (thread-safe)
         self._interpreter_cache = {}
+        self._interpreter_cache_lock = threading.Lock()
 
     def _detect_powershell(self) -> Optional[str]:
         """Detect PowerShell interpreter (prefer pwsh.exe over powershell.exe)."""
-        if 'powershell' in self._interpreter_cache:
-            return self._interpreter_cache['powershell']
+        with self._interpreter_cache_lock:
+            if 'powershell' in self._interpreter_cache:
+                return self._interpreter_cache['powershell']
 
-        # Check settings first
-        if self.settings:
-            custom_path = self.settings.get('interpreters/powershell_path')
-            if custom_path and os.path.exists(custom_path):
-                self._interpreter_cache['powershell'] = custom_path
-                return custom_path
+            # Check settings first
+            if self.settings:
+                custom_path = self.settings.get('interpreters/powershell_path')
+                if custom_path and os.path.exists(custom_path):
+                    self._interpreter_cache['powershell'] = custom_path
+                    return custom_path
 
-        # Try pwsh.exe (PowerShell Core) first
-        import shutil
-        pwsh_path = shutil.which('pwsh')
-        if pwsh_path:
-            self._interpreter_cache['powershell'] = pwsh_path
-            logger.info(f"Detected PowerShell Core at: {pwsh_path}")
-            return pwsh_path
+            # Try pwsh.exe (PowerShell Core) first
+            import shutil
+            pwsh_path = shutil.which('pwsh')
+            if pwsh_path:
+                self._interpreter_cache['powershell'] = pwsh_path
+                logger.info(f"Detected PowerShell Core at: {pwsh_path}")
+                return pwsh_path
 
-        # Fall back to powershell.exe (Windows PowerShell)
-        ps_path = shutil.which('powershell')
-        if ps_path:
-            self._interpreter_cache['powershell'] = ps_path
-            logger.info(f"Detected Windows PowerShell at: {ps_path}")
-            return ps_path
+            # Fall back to powershell.exe (Windows PowerShell)
+            ps_path = shutil.which('powershell')
+            if ps_path:
+                self._interpreter_cache['powershell'] = ps_path
+                logger.info(f"Detected Windows PowerShell at: {ps_path}")
+                return ps_path
 
-        logger.warning("PowerShell not found")
-        return None
+            logger.warning("PowerShell not found")
+            return None
 
     def _detect_bash(self) -> Optional[str]:
         """Detect bash interpreter (check WSL or custom path)."""
-        if 'bash' in self._interpreter_cache:
-            return self._interpreter_cache['bash']
+        with self._interpreter_cache_lock:
+            if 'bash' in self._interpreter_cache:
+                return self._interpreter_cache['bash']
 
-        # Check settings for custom bash path first
-        if self.settings:
-            custom_path = self.settings.get('interpreters/bash_path')
-            if custom_path and os.path.exists(custom_path):
-                self._interpreter_cache['bash'] = custom_path
-                return custom_path
+            # Check settings for custom bash path first
+            if self.settings:
+                custom_path = self.settings.get('interpreters/bash_path')
+                if custom_path and os.path.exists(custom_path):
+                    self._interpreter_cache['bash'] = custom_path
+                    return custom_path
 
-            # Check if WSL should be used
-            use_wsl = self.settings.get('interpreters/use_wsl', True)
-            if use_wsl:
-                # Check if WSL is available
-                import shutil
-                wsl_path = shutil.which('wsl')
-                if wsl_path:
-                    # WSL is available, return a special marker
-                    distro = self.settings.get('interpreters/wsl_distro', 'Ubuntu')
-                    wsl_cmd = f'wsl:{distro}'
-                    self._interpreter_cache['bash'] = wsl_cmd
-                    logger.info(f"Using WSL with distro: {distro}")
-                    return wsl_cmd
+                # Check if WSL should be used
+                use_wsl = self.settings.get('interpreters/use_wsl', True)
+                if use_wsl:
+                    # Check if WSL is available
+                    import shutil
+                    wsl_path = shutil.which('wsl')
+                    if wsl_path:
+                        # WSL is available, return a special marker
+                        distro = self.settings.get('interpreters/wsl_distro', 'Ubuntu')
+                        wsl_cmd = f'wsl:{distro}'
+                        self._interpreter_cache['bash'] = wsl_cmd
+                        logger.info(f"Using WSL with distro: {distro}")
+                        return wsl_cmd
 
-        # Try to find native bash
-        import shutil
-        bash_path = shutil.which('bash')
-        if bash_path:
-            self._interpreter_cache['bash'] = bash_path
-            logger.info(f"Detected bash at: {bash_path}")
-            return bash_path
+            # Try to find native bash
+            import shutil
+            bash_path = shutil.which('bash')
+            if bash_path:
+                self._interpreter_cache['bash'] = bash_path
+                logger.info(f"Detected bash at: {bash_path}")
+                return bash_path
 
-        logger.warning("Bash not found")
-        return None
+            logger.warning("Bash not found")
+            return None
 
     def _detect_cmd(self) -> Optional[str]:
         """Detect cmd.exe (always available on Windows)."""
-        if 'cmd' in self._interpreter_cache:
-            return self._interpreter_cache['cmd']
+        with self._interpreter_cache_lock:
+            if 'cmd' in self._interpreter_cache:
+                return self._interpreter_cache['cmd']
 
-        import shutil
-        cmd_path = shutil.which('cmd')
-        if cmd_path:
-            self._interpreter_cache['cmd'] = cmd_path
-            return cmd_path
+            import shutil
+            cmd_path = shutil.which('cmd')
+            if cmd_path:
+                self._interpreter_cache['cmd'] = cmd_path
+                return cmd_path
 
-        # Fallback to system32
-        system32_cmd = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'cmd.exe')
-        if os.path.exists(system32_cmd):
-            self._interpreter_cache['cmd'] = system32_cmd
-            return system32_cmd
+            # Fallback to system32
+            system32_cmd = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'cmd.exe')
+            if os.path.exists(system32_cmd):
+                self._interpreter_cache['cmd'] = system32_cmd
+                return system32_cmd
 
-        logger.error("cmd.exe not found (unexpected on Windows)")
-        return None
+            logger.error("cmd.exe not found (unexpected on Windows)")
+            return None
 
     def execute_script(self, script_info: ScriptInfo, arguments: Optional[Dict[str, Any]] = None) -> ExecutionResult:
         """Execute a script using the appropriate strategy."""

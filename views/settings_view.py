@@ -955,9 +955,9 @@ class SettingsView(QDialog):
         """Handle add external script button"""
         file_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Python Script",
+            "Select Script",
             "",
-            "Python Scripts (*.py)"
+            "All Scripts (*.py *.ps1 *.bat *.cmd *.sh);;Python Scripts (*.py);;PowerShell Scripts (*.ps1);;Batch Scripts (*.bat *.cmd);;Shell Scripts (*.sh)"
         )
         
         if file_path:
