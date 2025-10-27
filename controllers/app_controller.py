@@ -116,6 +116,13 @@ class AppController(QObject):
         except Exception as e:
             logger.error(f"Error stopping scheduled scripts: {e}")
 
+        # Clean up update controller
+        if self._update_controller:
+            try:
+                self._update_controller.cleanup()
+            except Exception as e:
+                logger.error(f"Error cleaning up update controller: {e}")
+
         self.application_shutting_down.emit()
         self._app_model.shutdown_application()
 
