@@ -7,6 +7,7 @@ We use Conventional Commits for all commit messages to keep history clear and to
 - Optional scope: narrow area like `settings`, `executor`, `ui`.
 - Body: explain the what/why; wrap at ~72 chars.
 - Breaking changes: add a footer `BREAKING CHANGE: <description>`.
+- Never add Claude as the commit author. Never mention "Claude Code" in the commit message.
 
 Examples:
 - `feat(settings): hard-code status refresh interval and remove UI control`
