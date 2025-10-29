@@ -67,11 +67,16 @@ class TrayView(QObject):
 
         # Create context menu (for tray icon clicks)
         self.context_menu = QMenu(parent)
-        self.context_menu.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.context_menu.setWindowFlags(
+            Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
+        )
 
         # Create hotkey menu (for hotkey activation)
         self.hotkey_menu = QMenu(parent)
-        self.hotkey_menu.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+        self.hotkey_menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.hotkey_menu.setWindowFlags(
+            Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
+        )
         self._apply_hotkey_menu_style()
 
         # Install event filter for ESC key handling on both menus
@@ -246,7 +251,9 @@ class TrayView(QObject):
 
         elif item_type == 'submenu':
             submenu = QMenu(text, parent_menu)
-            submenu.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+            submenu.setWindowFlags(
+                Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
+            )
             submenus_list.append(submenu)
 
             # Add submenu items (recursively with same tracking lists)
