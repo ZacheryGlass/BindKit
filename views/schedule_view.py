@@ -545,9 +545,10 @@ class ScheduleView(QWidget):
         if not script_name:
             return
         if schedule_info is None:
-            self._schedule_data.pop(script_name, None)
-        else:
-            self._schedule_data[script_name] = schedule_info
+            logger.warning(f"Received None schedule_info for {script_name}, skipping update")
+            return
+
+        self._schedule_data[script_name] = schedule_info
         self._update_table_row(script_name)
 
         if script_name == self.selected_script:

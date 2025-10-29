@@ -15,7 +15,7 @@ from collections import OrderedDict
 
 from .script_analyzer import ScriptInfo, ExecutionStrategy, ArgumentInfo
 from .service_runtime import ServiceRuntime, ServiceHandle, ServiceState
-from .schedule_runtime import ScheduleRuntime, ScheduleHandle
+from .schedule_runtime import ScheduleRuntime, ScheduleHandle, ScheduleType
 
 logger = logging.getLogger('Core.ScriptExecutor')
 
@@ -805,9 +805,10 @@ class ScriptExecutor:
             handle = self.schedule_runtime.start_schedule(
                 script_name,
                 script_info.file_path,
-                interval_seconds,
                 execution_callback,
-                self.settings
+                self.settings,
+                schedule_type=ScheduleType.INTERVAL,
+                interval_seconds=interval_seconds
             )
 
             return ExecutionResult(
