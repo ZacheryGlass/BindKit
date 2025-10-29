@@ -240,7 +240,6 @@ class HotkeyConfigView(QDialog):
         self.current_hotkey = current_hotkey
         
         self.setWindowTitle(f"Configure Hotkey - {script_name}")
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setModal(True)
         self.setMinimumWidth(400)
         
@@ -341,19 +340,3 @@ class HotkeyConfigView(QDialog):
         hotkey = self.hotkey_recorder.get_hotkey()
         return hotkey if hotkey else None
 
-    def keyPressEvent(self, event):
-        """Handle key press events - close on ESC unless hotkey recorder is recording"""
-        if event.key() == Qt.Key.Key_Escape:
-            # Check if the hotkey recorder is in focus and recording
-            if self.hotkey_recorder.recording and self.hotkey_recorder.hasFocus():
-                # Let the recorder widget handle ESC (it will cancel recording)
-                return
-            # Otherwise close the dialog
-            self.close()
-            return
-        super().keyPressEvent(event)
-
-    def focusOutEvent(self, event):
-        """Close dialog when it loses focus (user clicks outside)"""
-        self.close()
-        super().focusOutEvent(event)
