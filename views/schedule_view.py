@@ -126,7 +126,6 @@ class ScheduleView(QWidget):
         validation_row_layout = QHBoxLayout()
         validation_row_layout.addStretch()
         self.cron_error_label = QLabel()
-        self.cron_error_label.setStyleSheet("color: #d9534f; font-size: 10px;")
         validation_row_layout.addWidget(self.cron_error_label)
         validation_row_layout.addStretch()
         self.validation_indicator_widget = QWidget()
@@ -136,10 +135,8 @@ class ScheduleView(QWidget):
 
         # Next runs preview row (for CRON mode)
         preview_label = QLabel("Next 5 runs:")
-        preview_label.setStyleSheet("font-size: 10px; color: #666;")
         controls_layout.addWidget(preview_label)
         self.next_runs_label = QLabel("Not scheduled")
-        self.next_runs_label.setStyleSheet("font-size: 9px; color: #999; margin-left: 15px;")
         controls_layout.addWidget(self.next_runs_label)
         self.next_runs_preview_widget = QWidget()
         next_runs_layout = QVBoxLayout()
@@ -274,7 +271,6 @@ class ScheduleView(QWidget):
         schedule_item = self._ensure_table_item(row, 1, Qt.AlignmentFlag.AlignCenter)
         enabled = data.get('enabled', False)
         schedule_item.setText('On' if enabled else 'Off')
-        schedule_item.setForeground(QBrush(QColor('#1f7a4a' if enabled else '#6e6f78')))
         schedule_item.setToolTip('Click to toggle schedule on/off')
 
         interval_item = self._ensure_table_item(row, 2, Qt.AlignmentFlag.AlignCenter)

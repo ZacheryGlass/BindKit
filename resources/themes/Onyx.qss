@@ -74,6 +74,7 @@ QTableWidget, QTableView, QListWidget, QListView, QTreeWidget, QTreeView {
     background-color: #1A1A1A;
     color: #EAEAEA;
     border: 1px solid #3A3A3A;
+    border-radius: 6px;
     selection-background-color: #4CC2FF;
     selection-color: #000000;
     alternate-background-color: #23262F;
@@ -94,3 +95,33 @@ QToolTip {
 /* Links / accents */
 QLabel a { color: #4CC2FF; }
 QPushButton[flat="true"] { color: #4CC2FF; border: none; background: transparent; }
+
+/* Appearance sliders */
+QSlider[appearanceSlider="true"] {
+    min-height: 36px;
+}
+QSlider[appearanceSlider="true"]::groove:horizontal {
+    background: #1E1E1E;
+    border: 1px solid #3A3A3A;
+    height: 12px;
+    border-radius: 6px;
+}
+QSlider[appearanceSlider="true"]::sub-page:horizontal {
+    background: #4CC2FF;
+    border-radius: 6px;
+}
+QSlider[appearanceSlider="true"]::add-page:horizontal {
+    background: #121212;
+    border-radius: 6px;
+}
+QSlider[appearanceSlider="true"]::handle:horizontal {
+    background: #4CC2FF;
+    width: 24px;
+    height: 24px;
+    margin: -6px 0;
+    border-radius: 12px;
+    border: 1px solid #1B1B1B;
+}
+QSlider[appearanceSlider="true"]::handle:horizontal:hover {
+    background: #7FD8FF;
+}

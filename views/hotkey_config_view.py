@@ -180,7 +180,6 @@ class HotkeyRecorderWidget(QLineEdit):
         self.current_key = None
         self.setText("Press a key combination...")
         self.setFocus()
-        self.setStyleSheet("background-color: #2a2a2a; border: 2px solid #4a90e2;")
     
     def stop_recording(self):
         """Stop recording key combinations"""
@@ -268,7 +267,6 @@ class HotkeyConfigView(QDialog):
             "Use Ctrl, Alt, Shift, or Win as modifiers."
         )
         instructions.setWordWrap(True)
-        instructions.setStyleSheet("color: #999;")
         layout.addWidget(instructions)
         
         # Hotkey recorder
@@ -280,7 +278,6 @@ class HotkeyConfigView(QDialog):
         
         # Validation label
         self.validation_label = QLabel("")
-        self.validation_label.setStyleSheet("color: #ff6b6b;")
         self.validation_label.setVisible(False)
         layout.addWidget(self.validation_label)
         
@@ -312,13 +309,11 @@ class HotkeyConfigView(QDialog):
     def show_validation_warning(self, message: str):
         """Show a validation warning message"""
         self.validation_label.setText(message)
-        self.validation_label.setStyleSheet("color: #ffa500;")
         self.validation_label.setVisible(True)
     
     def clear_validation(self):
         """Clear any validation messages"""
         self.validation_label.setVisible(False)
-        self.validation_label.setStyleSheet("color: #ff6b6b;")
     
     def clear_hotkey(self):
         """Clear the current hotkey"""

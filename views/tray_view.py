@@ -11,7 +11,7 @@ import weakref
 from typing import Optional, Dict, Any, List
 from PyQt6.QtWidgets import (QSystemTrayIcon, QMenu, QWidget)
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer, Qt, QEvent
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QBrush, QPen, QCursor, QAction, QKeyEvent
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QBrush, QPen, QCursor, QAction, QKeyEvent, QColor
 
 logger = logging.getLogger('Views.Tray')
 
@@ -77,7 +77,7 @@ class TrayView(QObject):
         self.hotkey_menu.setWindowFlags(
             Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
         )
-        self._apply_hotkey_menu_style()
+        self._apply_hotkey_menu_transparency()
 
         # Install event filter for ESC key handling on both menus
         self._key_event_filter = MenuKeyEventFilter()
@@ -92,7 +92,82 @@ class TrayView(QObject):
         self.tray_icon.setContextMenu(self.context_menu)
         
         logger.info("TrayView initialized")
-    
+
+    def _apply_hotkey_menu_transparency(self):
+        """Apply semi-transparent background to hotkey menu using current theme colors"""
+        from PyQt6.QtWidgets import QApplication
+        import re
+
+        # Get current theme colors from global stylesheet
+        app = QApplication.instance()
+        if not app:
+            return
+
+        stylesheet = app.styleSheet()
+
+        # Parse QMenu background color from stylesheet
+        # Look for patterns like: QMenu { ... background-color: #171A21; ... }
+        menu_bg_color = None
+        menu_border_color = None
+
+        # Find QMenu section in stylesheet
+        menu_match = re.search(r'QMenu[^{]*\{([^}]+)\}', stylesheet, re.DOTALL)
+        if menu_match:
+            menu_section = menu_match.group(1)
+
+            # Extract background-color
+            bg_match = re.search(r'background-color:\s*([#\w]+)', menu_section)
+            if bg_match:
+                menu_bg_color = bg_match.group(1)
+
+            # Extract border color
+            border_match = re.search(r'border:\s*[^;]*\s+([#\w]+)', menu_section)
+            if border_match:
+                menu_border_color = border_match.group(1)
+
+        # Convert hex colors to RGBA with transparency
+        def hex_to_rgba(hex_color: str, alpha: float = 0.85) -> str:
+            """Convert hex color to rgba string with specified alpha"""
+            if not hex_color or not hex_color.startswith('#'):
+                return f"rgba(45, 45, 45, {alpha})"  # fallback
+
+            hex_color = hex_color.lstrip('#')
+            if len(hex_color) == 6:
+                r = int(hex_color[0:2], 16)
+                g = int(hex_color[2:4], 16)
+                b = int(hex_color[4:6], 16)
+                return f"rgba({r}, {g}, {b}, {alpha})"
+            return f"rgba(45, 45, 45, {alpha})"  # fallback
+
+        # Apply theme-aware transparent style
+        bg_rgba = hex_to_rgba(menu_bg_color, 0.85)
+        border_rgba = hex_to_rgba(menu_border_color, 0.3) if menu_border_color else "rgba(255, 255, 255, 0.2)"
+
+        self.hotkey_menu.setStyleSheet(f"""
+            QMenu {{
+                background-color: {bg_rgba};
+                border: 1px solid {border_rgba};
+                border-radius: 12px;
+                padding: 8px;
+            }}
+            QMenu::item {{
+                padding: 12px 20px;
+                border-radius: 8px;
+            }}
+            QMenu::separator {{
+                height: 1px;
+                background: rgba(255, 255, 255, 0.15);
+                margin: 8px 16px;
+            }}
+        """)
+
+    def refresh_theme(self):
+        """Reapply theme-sensitive styling for tray menus."""
+        try:
+            self._apply_hotkey_menu_transparency()
+        except Exception as exc:
+            logger.debug(f"Failed to refresh tray theme styling: {exc}")
+
     def show_icon(self):
         """Show the tray icon"""
         self.tray_icon.show()
@@ -303,34 +378,6 @@ class TrayView(QObject):
             if app:
                 self.tray_icon.setIcon(app.style().standardIcon(
                     app.style().StandardPixmap.SP_ComputerIcon))
-
-    def _apply_hotkey_menu_style(self):
-        """Apply custom styling to the hotkey menu"""
-        # Modern, semi-transparent launcher-style menu
-        self.hotkey_menu.setStyleSheet("""
-            QMenu {
-                background-color: rgba(45, 45, 45, 0.85);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 12px;
-                padding: 8px;
-            }
-            QMenu::item {
-                background-color: transparent;
-                color: white;
-                font-size: 16pt;
-                font-weight: 500;
-                padding: 12px 20px;
-                border-radius: 8px;
-            }
-            QMenu::item:selected {
-                background-color: rgba(100, 150, 255, 0.4);
-            }
-            QMenu::separator {
-                height: 1px;
-                background: rgba(255, 255, 255, 0.15);
-                margin: 8px 16px;
-            }
-        """)
 
     def _on_tray_activated(self, reason):
         """Handle tray icon activation"""

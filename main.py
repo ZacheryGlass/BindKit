@@ -9,7 +9,7 @@ import os
 import logging
 import argparse
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMessageBox
-from PyQt6.QtCore import Qt, QLockFile, QDir, QStandardPaths, QMutex
+from PyQt6.QtCore import Qt, QLockFile, QDir, QStandardPaths, QMutex, QTimer
 import signal
 import atexit
 
@@ -28,6 +28,7 @@ from views.preset_editor_view import PresetEditorView
 from core.hotkey_manager import HotkeyManager
 from core.memory_monitor import get_memory_monitor
 from core.theme_manager import ThemeManager
+from core.settings import SettingsManager
 
 
 def setup_logging():
@@ -190,6 +191,7 @@ class MVCApplication:
         self._settings_controller = None
         self._settings_opening = False
         self._settings_mutex = QMutex()  # Thread-safe access to settings dialog state
+        self._settings_manager = None
 
         # Track failed hotkey registrations for user notification
         self._failed_hotkey_registrations = {}  # script_name -> error_message
@@ -305,6 +307,12 @@ class MVCApplication:
         tray_model = self.app_controller.get_tray_model()
         notification_model = self.app_controller.get_notification_model()
 
+        # Reuse the shared settings manager so we can observe appearance updates.
+        try:
+            self._settings_manager = script_collection._settings
+        except AttributeError:
+            self._settings_manager = None
+
         # Store script execution model for later access
         self._script_execution = script_execution
 
@@ -376,6 +384,13 @@ class MVCApplication:
         
         # Initialize tray view based on models
         self._initialize_view_states()
+
+        # React to appearance changes so tray theming stays current.
+        if self._settings_manager:
+            try:
+                self._settings_manager.settings_changed.connect(self._handle_setting_changed)
+            except (TypeError, RuntimeError, AttributeError) as err:
+                self.logger.debug(f"Could not connect settings changed handler: {err}")
         
         self.logger.debug("MVC connections setup complete")
     
@@ -525,6 +540,16 @@ class MVCApplication:
         
         # Update tray menu with current scripts
         self.tray_controller.update_menu()
+    
+    def _handle_setting_changed(self, key, value):
+        """React to settings updates that affect the tray view."""
+        if not key or not self.tray_view:
+            return
+        if key.startswith('appearance/'):
+            try:
+                QTimer.singleShot(0, self.tray_view.refresh_theme)
+            except Exception as err:
+                self.logger.debug(f"Failed to schedule tray theme refresh for '{key}': {err}")
     
     def _handle_exit_request(self):
         """Handle application exit request"""
@@ -956,6 +981,12 @@ class MVCApplication:
 
                 except (TypeError, RuntimeError, AttributeError) as e:
                     self.logger.debug(f"Model signals already disconnected or not connected: {e}")
+
+            if self._settings_manager:
+                try:
+                    self._settings_manager.settings_changed.disconnect()
+                except (TypeError, RuntimeError, AttributeError) as e:
+                    self.logger.debug(f"Settings manager signals already disconnected or not connected: {e}")
                     
             self.logger.debug("Signal disconnection completed")
             

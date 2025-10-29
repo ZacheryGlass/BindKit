@@ -5,16 +5,15 @@ This view provides the settings dialog interface without business logic,
 emitting signals for user interactions and updating display based on controller data.
 """
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGroupBox, QCheckBox,
     QLabel, QPushButton, QWidget, QTabWidget,
     QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView,
-    QSpinBox, QDoubleSpinBox, QComboBox, QListWidget, QListWidgetItem, QMessageBox,
-    QFileDialog, QInputDialog, QFrame
+    QSpinBox, QComboBox, QMessageBox,
+    QFileDialog, QInputDialog, QSlider
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QIcon, QAction
 
 logger = logging.getLogger('Views.Settings')
 
@@ -109,8 +108,10 @@ class SettingsView(QDialog):
         # Appearance controls
         self.theme_combo = None
         self.follow_system_checkbox = None
-        self.font_size_spinbox = None
-        self.layout_density_spinbox = None
+        self.font_size_slider = None
+        self.font_size_value_label = None
+        self.layout_density_slider = None
+        self.layout_density_value_label = None
         
         # Track current data
         self._script_data = []
@@ -262,28 +263,47 @@ class SettingsView(QDialog):
         # Font size control
         font_row = QHBoxLayout()
         font_row.addWidget(QLabel("Font size (pt):"))
-        self.font_size_spinbox = QSpinBox()
-        self.font_size_spinbox.setRange(9, 18)
-        self.font_size_spinbox.setValue(11)
-        self.font_size_spinbox.valueChanged.connect(self.font_size_changed.emit)
-        font_row.addWidget(self.font_size_spinbox)
+        self.font_size_slider = QSlider(Qt.Orientation.Horizontal)
+        self.font_size_slider.setRange(9, 18)
+        self.font_size_slider.setSingleStep(1)
+        self.font_size_slider.setPageStep(1)
+        self.font_size_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.font_size_slider.setMinimumWidth(560)
+        self.font_size_slider.setFixedHeight(36)
+        self.font_size_slider.setProperty("appearanceSlider", True)
+        self.font_size_slider.style().unpolish(self.font_size_slider)
+        self.font_size_slider.style().polish(self.font_size_slider)
+        self.font_size_slider.update()
+        self.font_size_slider.valueChanged.connect(self._on_font_size_slider_changed)
+        font_row.addWidget(self.font_size_slider, 2)
+        self.font_size_value_label = QLabel("11 pt")
+        font_row.addWidget(self.font_size_value_label)
         font_row.addStretch()
+        self.font_size_slider.setValue(11)
         theme_layout.addLayout(font_row)
 
         # Layout density control
         density_row = QHBoxLayout()
         density_row.addWidget(QLabel("Layout density:"))
-        self.layout_density_spinbox = QDoubleSpinBox()
-        self.layout_density_spinbox.setRange(0.8, 1.4)
-        self.layout_density_spinbox.setSingleStep(0.05)
-        self.layout_density_spinbox.setDecimals(2)
-        self.layout_density_spinbox.setValue(1.0)
-        self.layout_density_spinbox.valueChanged.connect(self._on_density_changed)
-        density_row.addWidget(self.layout_density_spinbox)
-        density_hint = QLabel("Lower = compact, higher = roomy")
-        density_hint.setWordWrap(False)
-        density_row.addWidget(density_hint)
+        self.layout_density_slider = QSlider(Qt.Orientation.Horizontal)
+        self.layout_density_slider.setRange(80, 140)  # represent 0.80-1.40 in hundredths
+        self.layout_density_slider.setSingleStep(1)
+        self.layout_density_slider.setPageStep(5)
+        self.layout_density_slider.setTickPosition(QSlider.TickPosition.NoTicks)
+        self.layout_density_slider.setMinimumWidth(560)
+        self.layout_density_slider.setFixedHeight(36)
+        self.layout_density_slider.setProperty("appearanceSlider", True)
+        self.layout_density_slider.style().unpolish(self.layout_density_slider)
+        self.layout_density_slider.style().polish(self.layout_density_slider)
+        self.layout_density_slider.update()
+        self.layout_density_slider.valueChanged.connect(self._on_density_slider_changed)
+        density_row.addWidget(self.layout_density_slider, 2)
+        self.layout_density_value_label = QLabel("1.00x")
+        density_row.addWidget(self.layout_density_value_label)
         density_row.addStretch()
+        default_density_slider = self._scale_to_slider_value(1.0)
+        self.layout_density_slider.setValue(default_density_slider)
+        self._update_density_display(1.0)
         theme_layout.addLayout(density_row)
 
         theme_group.setLayout(theme_layout)
@@ -490,7 +510,6 @@ class SettingsView(QDialog):
             "âš ï¸ Warning: Reset operations cannot be undone!\n\n"
             "Choose what you want to reset:"
         )
-        warning.setStyleSheet("color: orange;")
         layout.addWidget(warning)
         # Ensure clean ASCII text in case of encoding glitches in literals
         warning.setText(
@@ -561,28 +580,65 @@ class SettingsView(QDialog):
             block = self.follow_system_checkbox.blockSignals(True)
             self.follow_system_checkbox.setChecked(bool(settings.get('follow_system', False)))
             self.follow_system_checkbox.blockSignals(block)
-        if self.font_size_spinbox:
+        if self.font_size_slider:
             font_value = settings.get('font_size', 11)
             try:
                 font_value = int(font_value)
             except (TypeError, ValueError):
                 font_value = 11
-            block = self.font_size_spinbox.blockSignals(True)
-            self.font_size_spinbox.setValue(font_value)
-            self.font_size_spinbox.blockSignals(block)
-        if self.layout_density_spinbox:
+            font_value = max(9, min(18, font_value))
+            block = self.font_size_slider.blockSignals(True)
+            self.font_size_slider.setValue(font_value)
+            self.font_size_slider.blockSignals(block)
+            self._update_font_size_display(font_value)
+        if self.layout_density_slider:
             density_value = settings.get('padding_scale', 1.0)
             try:
                 density_value = float(density_value)
             except (TypeError, ValueError):
                 density_value = 1.0
-            block = self.layout_density_spinbox.blockSignals(True)
-            self.layout_density_spinbox.setValue(density_value)
-            self.layout_density_spinbox.blockSignals(block)
+            slider_value = self._scale_to_slider_value(density_value)
+            block = self.layout_density_slider.blockSignals(True)
+            self.layout_density_slider.setValue(slider_value)
+            self.layout_density_slider.blockSignals(block)
+            self._update_density_display(self._slider_value_to_scale(slider_value))
 
-    def _on_density_changed(self, value: float):
+    def _on_font_size_slider_changed(self, value: int):
+        """Emit font size changes with slider feedback."""
+        self._update_font_size_display(value)
+        self.font_size_changed.emit(value)
+
+    def _on_density_slider_changed(self, slider_value: int):
         """Emit layout density changes as padding scale updates."""
-        self.padding_scale_changed.emit(value)
+        scale = self._slider_value_to_scale(slider_value)
+        self._update_density_display(scale)
+        self.padding_scale_changed.emit(scale)
+    
+    def _update_font_size_display(self, value: int):
+        """Update font size label."""
+        if self.font_size_value_label:
+            self.font_size_value_label.setText(f"{value} pt")
+    
+    def _update_density_display(self, scale: float):
+        """Update density label with formatted scale."""
+        if self.layout_density_value_label:
+            self.layout_density_value_label.setText(f"{scale:.2f}x")
+    
+    @staticmethod
+    def _slider_value_to_scale(slider_value: int) -> float:
+        """Convert slider position to padding scale (0.80 - 1.40)."""
+        slider_value = max(80, min(140, slider_value))
+        return round(slider_value / 100.0, 2)
+    
+    @staticmethod
+    def _scale_to_slider_value(scale: float) -> int:
+        """Convert padding scale to slider position."""
+        try:
+            scale = float(scale)
+        except (TypeError, ValueError):
+            scale = 1.0
+        scale = max(0.8, min(1.4, scale))
+        return int(round(scale * 100))
     
     def update_script_list(self, scripts: List[Dict[str, Any]]):
         """Update the scripts table"""
@@ -665,12 +721,7 @@ class SettingsView(QDialog):
         for row, script in enumerate(self._script_data):
             # Action button (disable or remove) - column 0
             action_btn = QPushButton()
-            action_btn.setStyleSheet(
-                "QPushButton { background: transparent; border: none; border-radius: 0; padding: 2px 12px; margin: 0; text-align: left; }"
-                "QPushButton:hover { background: transparent; }"
-                "QPushButton:pressed { background: transparent; }"
-                "QPushButton:disabled { background: transparent; color: #6E6F78; }"
-            )
+            action_btn.setFlat(True)
             try:
                 from PyQt6.QtWidgets import QSizePolicy
                 action_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -710,12 +761,7 @@ class SettingsView(QDialog):
             custom_name = script.get('custom_name', '')
             custom_btn_text = custom_name if custom_name else 'Click to set'
             custom_name_btn = QPushButton(custom_btn_text)
-            custom_name_btn.setStyleSheet(
-                "QPushButton { background: transparent; border: none; border-radius: 0; padding: 2px 12px; margin: 0; text-align: left; }"
-                "QPushButton:hover { background: transparent; }"
-                "QPushButton:pressed { background: transparent; }"
-                "QPushButton:disabled { background: transparent; color: #6E6F78; }"
-            )
+            custom_name_btn.setFlat(True)
             try:
                 from PyQt6.QtWidgets import QSizePolicy
                 custom_name_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -761,12 +807,7 @@ class SettingsView(QDialog):
             raw_hotkey = script.get('hotkey', '')
             hotkey_text = raw_hotkey if raw_hotkey else 'Click to set'
             hotkey_btn = QPushButton(hotkey_text)
-            hotkey_btn.setStyleSheet(
-                "QPushButton { background: transparent; border: none; border-radius: 0; padding: 2px 12px; margin: 0; text-align: left; }"
-                "QPushButton:hover { background: transparent; }"
-                "QPushButton:pressed { background: transparent; }"
-                "QPushButton:disabled { background: transparent; color: #6E6F78; }"
-            )
+            hotkey_btn.setFlat(True)
             try:
                 from PyQt6.QtWidgets import QSizePolicy
                 hotkey_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -881,10 +922,6 @@ class SettingsView(QDialog):
 
             edit_btn = QPushButton("Edit")
             edit_btn.setFlat(True)
-            edit_btn.setStyleSheet(
-                "QPushButton { border: none; border-radius: 0; padding: 0px 12px; margin: 0; background: transparent; }"
-                "QPushButton:hover { background-color: #5A5B64; }"
-            )
             try:
                 from PyQt6.QtWidgets import QSizePolicy
                 edit_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -904,10 +941,6 @@ class SettingsView(QDialog):
 
             del_btn = QPushButton("Delete")
             del_btn.setFlat(True)
-            del_btn.setStyleSheet(
-                "QPushButton { border: none; border-radius: 0; padding: 0px 12px; margin: 0; background: transparent; }"
-                "QPushButton:hover { background-color: #5A5B64; }"
-            )
             try:
                 from PyQt6.QtWidgets import QSizePolicy
                 del_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)

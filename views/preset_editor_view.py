@@ -181,7 +181,6 @@ class PresetEditorView(QDialog):
                 self.args_layout.addWidget(arg_widget)
         else:
             no_args_label = QLabel("This script has no configurable arguments")
-            no_args_label.setStyleSheet("color: #999;")
             self.args_layout.addWidget(no_args_label)
         
         self.args_layout.addStretch()
