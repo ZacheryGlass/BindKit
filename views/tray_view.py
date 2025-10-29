@@ -10,10 +10,24 @@ import gc
 import weakref
 from typing import Optional, Dict, Any, List
 from PyQt6.QtWidgets import (QSystemTrayIcon, QMenu, QWidget)
-from PyQt6.QtCore import QObject, pyqtSignal, QTimer, Qt
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QBrush, QPen, QCursor, QAction
+from PyQt6.QtCore import QObject, pyqtSignal, QTimer, Qt, QEvent
+from PyQt6.QtGui import QIcon, QPixmap, QPainter, QBrush, QPen, QCursor, QAction, QKeyEvent
 
 logger = logging.getLogger('Views.Tray')
+
+
+class MenuKeyEventFilter(QObject):
+    """Event filter to handle ESC key presses in menus"""
+
+    def eventFilter(self, obj, event):
+        """Handle key press events"""
+        if event.type() == QEvent.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Escape:
+                # Close the menu when ESC is pressed
+                if isinstance(obj, QMenu):
+                    obj.close()
+                return True
+        return super().eventFilter(obj, event)
 
 
 class TrayView(QObject):
@@ -53,14 +67,21 @@ class TrayView(QObject):
 
         # Create context menu (for tray icon clicks)
         self.context_menu = QMenu(parent)
+        self.context_menu.setWindowFlags(Qt.WindowType.FramelessWindowHint)
 
         # Create hotkey menu (for hotkey activation)
         self.hotkey_menu = QMenu(parent)
+        self.hotkey_menu.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self._apply_hotkey_menu_style()
-        
+
+        # Install event filter for ESC key handling on both menus
+        self._key_event_filter = MenuKeyEventFilter()
+        self.context_menu.installEventFilter(self._key_event_filter)
+        self.hotkey_menu.installEventFilter(self._key_event_filter)
+
         # Create and set icon
         self._create_tray_icon()
-        
+
         # Connect signals
         self.tray_icon.activated.connect(self._on_tray_activated)
         self.tray_icon.setContextMenu(self.context_menu)
