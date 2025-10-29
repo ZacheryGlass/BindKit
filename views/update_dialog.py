@@ -54,6 +54,7 @@ class UpdateDialog(QDialog):
     def _init_ui(self):
         """Initialize the user interface"""
         self.setWindowTitle("Update Available")
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setModal(True)
         self.setMinimumSize(500, 400)
         self.resize(600, 500)
@@ -248,3 +249,15 @@ class UpdateDialog(QDialog):
         if reply == QMessageBox.StandardButton.Yes:
             self.skip_version_clicked.emit()
             self.reject()  # Close dialog
+
+    def keyPressEvent(self, event):
+        """Handle key press events - close on ESC"""
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+            return
+        super().keyPressEvent(event)
+
+    def focusOutEvent(self, event):
+        """Close dialog when it loses focus (user clicks outside)"""
+        self.close()
+        super().focusOutEvent(event)

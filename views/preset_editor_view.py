@@ -137,6 +137,7 @@ class PresetEditorView(QDialog):
         self.initial_args = initial_args or {}
 
         self.setWindowTitle(f"Preset Editor - {script_name}")
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setModal(True)
         self.setMinimumSize(500, 360)
 
@@ -242,4 +243,16 @@ class PresetEditorView(QDialog):
         self.accept()
     
     # No local delete/add helpers; handled in Settings tab
+
+    def keyPressEvent(self, event):
+        """Handle key press events - close on ESC"""
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+            return
+        super().keyPressEvent(event)
+
+    def focusOutEvent(self, event):
+        """Close dialog when it loses focus (user clicks outside)"""
+        self.close()
+        super().focusOutEvent(event)
 

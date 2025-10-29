@@ -123,6 +123,7 @@ class SettingsView(QDialog):
     def _init_ui(self):
         """Initialize the user interface"""
         self.setWindowTitle("Settings")
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         self.setModal(True)
         # Ensure dialog is destroyed when closed to avoid accumulating hidden instances
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
@@ -1193,6 +1194,18 @@ class SettingsView(QDialog):
             QMessageBox.warning(self, "Hotkey Validation Results", message)
         else:
             QMessageBox.information(self, "Hotkey Validation Results", message)
+
+    def keyPressEvent(self, event):
+        """Handle key press events - close on ESC"""
+        if event.key() == Qt.Key.Key_Escape:
+            self.close()
+            return
+        super().keyPressEvent(event)
+
+    def focusOutEvent(self, event):
+        """Close dialog when it loses focus (user clicks outside)"""
+        self.close()
+        super().focusOutEvent(event)
 
     def closeEvent(self, event):
         """Clean up resources when dialog is closed to prevent memory leaks."""
