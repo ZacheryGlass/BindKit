@@ -89,7 +89,9 @@ class ScheduleView(QWidget):
 
         # Interval controls row (visible when Interval mode is selected)
         interval_row_layout = QHBoxLayout()
-        interval_row_layout.addWidget(QLabel("Interval:"))
+        interval_label = QLabel("Interval:")
+        interval_label.setStyleSheet("background: transparent;")
+        interval_row_layout.addWidget(interval_label)
         self.interval_spinbox = QSpinBox()
         self.interval_spinbox.setMinimum(1)
         self.interval_spinbox.setMaximum(999999)
@@ -106,6 +108,7 @@ class ScheduleView(QWidget):
         interval_row_layout.addWidget(self.interval_unit_combo)
         interval_row_layout.addStretch()
         self.interval_controls_widget = QWidget()
+        self.interval_controls_widget.setStyleSheet("background: transparent;")
         self.interval_controls_widget.setLayout(interval_row_layout)
         controls_layout.addWidget(self.interval_controls_widget)
 

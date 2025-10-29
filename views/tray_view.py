@@ -303,16 +303,7 @@ class TrayView(QObject):
             action = QAction(text, parent_menu)
             action.setEnabled(enabled)
 
-            # Add script type icon if available
-            script_type = item_data.get('script_type')
-            if script_type:
-                try:
-                    from gui.script_icons import ScriptIconGenerator
-                    icon = ScriptIconGenerator.create_icon(script_type)
-                    if icon:
-                        action.setIcon(icon)
-                except Exception as e:
-                    logger.debug(f"Could not create icon for script type {script_type}: {e}")
+            # Icons removed in favor of text labels
 
             # Connect action if data is provided
             action_data = item_data.get('data')

@@ -501,7 +501,20 @@ class ScriptAnalyzer:
         name = script_path.stem
         # Convert snake_case or kebab-case to Title Case
         name = name.replace('_', ' ').replace('-', ' ')
-        return ' '.join(word.capitalize() for word in name.split())
+        base_name = ' '.join(word.capitalize() for word in name.split())
+        
+        # Add type prefix based on file extension
+        suffix = script_path.suffix.lower()
+        if suffix == '.py':
+            return f"[PY] {base_name}"
+        elif suffix == '.ps1':
+            return f"[PS] {base_name}" 
+        elif suffix in ['.bat', '.cmd']:
+            return f"[BAT] {base_name}"
+        elif suffix == '.sh':
+            return f"[SH] {base_name}"
+        else:
+            return base_name
     
     def _has_main_function(self, tree: ast.AST) -> bool:
         """Check if the script has a main() function."""
