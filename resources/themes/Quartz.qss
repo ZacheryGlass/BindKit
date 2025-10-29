@@ -9,6 +9,7 @@ QWidget {
 
 QLabel, QCheckBox, QRadioButton, QGroupBox, QTabWidget::tab-bar {
     color: #111827;
+    background-color: transparent;
 }
 
 QMenu, QDialog, QTabWidget::pane {

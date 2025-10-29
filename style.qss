@@ -280,6 +280,7 @@ QCheckBox {
     color: #F0F0F5;
     font-size: 10pt;
     spacing: 8px;
+    background-color: transparent;
 }
 
 QCheckBox::indicator {
@@ -315,6 +316,7 @@ QRadioButton {
     color: #F0F0F5;
     font-size: 10pt;
     spacing: 8px;
+    background-color: transparent;
 }
 
 QRadioButton::indicator {
@@ -359,6 +361,7 @@ QGroupBox::title {
 QLabel {
     color: #F0F0F5;
     font-size: 10pt;
+    background-color: transparent;
 }
 
 QLabel[class="secondary"] {
@@ -469,6 +472,7 @@ QMessageBox {
 
 QMessageBox QLabel {
     color: #F0F0F5;
+    background-color: transparent;
 }
 
 /* Progress Bar Styling */
