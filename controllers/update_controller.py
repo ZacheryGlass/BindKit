@@ -91,7 +91,7 @@ class UpdateController(QObject):
     def _on_check_started(self):
         """Handle update check start"""
         logger.debug("Update check started")
-        self._model.emit(self._model.update_check_started)
+        self._model.update_check_started.emit()
         self.update_check_started.emit()
 
     def _on_check_completed(self, update_available: bool, update_info: dict):
@@ -113,7 +113,7 @@ class UpdateController(QObject):
                 size=update_info.get('download_size', 0)
             )
             self._model.set_state('available')
-            self._model.emit(self._model.update_available, update_info)
+            self._model.update_available.emit(update_info)
             self.update_available.emit(latest_version)
 
             # Show dialog if requested
@@ -122,14 +122,14 @@ class UpdateController(QObject):
         else:
             logger.info("No updates available")
             self._model.set_state('idle')
-            self._model.emit(self._model.update_not_available)
+            self._model.update_not_available.emit()
             self.update_not_available.emit()
 
     def _on_check_failed(self, error_message: str):
         """Handle update check failure"""
         logger.error(f"Update check failed: {error_message}")
         self._model.set_error(error_message)
-        self._model.emit(self._model.check_error, error_message)
+        self._model.check_error.emit(error_message)
 
     def _show_update_dialog(self):
         """Show the update dialog with current update information"""
@@ -196,13 +196,13 @@ class UpdateController(QObject):
         logger.debug("Download started")
         if self._dialog:
             self._dialog.show_download_progress()
-        self._model.emit(self._model.download_started)
+        self._model.download_started.emit()
 
     def _on_download_progress(self, current: int, total: int):
         """Handle download progress update"""
         if self._dialog:
             self._dialog.update_download_progress(current, total)
-        self._model.emit(self._model.download_progress, current, total)
+        self._model.download_progress.emit(current, total)
 
     def _on_download_completed(self, file_path: str):
         """Handle download completion"""
@@ -214,7 +214,7 @@ class UpdateController(QObject):
         if self._dialog:
             self._dialog.show_download_complete()
 
-        self._model.emit(self._model.download_completed, file_path)
+        self._model.download_completed.emit(file_path)
 
         # Launch installer
         self._install_update(file_path)
@@ -227,7 +227,7 @@ class UpdateController(QObject):
             self._dialog.show_download_error(error_message)
 
         self._model.set_state('available')  # Return to available state
-        self._model.emit(self._model.download_failed, error_message)
+        self._model.download_failed.emit(error_message)
 
     def _install_update(self, installer_path: str):
         """
@@ -238,7 +238,7 @@ class UpdateController(QObject):
         """
         logger.info("Installing update...")
         self._model.set_state('installing')
-        self._model.emit(self._model.installation_started)
+        self._model.installation_started.emit()
         self.installation_started.emit()
 
         # Launch installer
