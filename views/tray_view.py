@@ -246,6 +246,7 @@ class TrayView(QObject):
 
         elif item_type == 'submenu':
             submenu = QMenu(text, parent_menu)
+            submenu.setWindowFlags(Qt.WindowType.FramelessWindowHint)
             submenus_list.append(submenu)
 
             # Add submenu items (recursively with same tracking lists)
