@@ -569,6 +569,26 @@ class SettingsView(QDialog):
             tooltip = f"Current hotkey: {hotkey}\nClick to change" if hotkey else "No hotkey set. Click to change"
             self.show_menu_hotkey_btn.setToolTip(tooltip)
 
+    def _on_font_size_slider_changed(self, value: int):
+        """Emit font size changes with slider feedback."""
+        self._update_font_size_display(value)
+        self.font_size_changed.emit(value)
+
+    def _on_density_slider_changed(self, slider_value: int):
+        """Emit layout density changes as padding scale updates."""
+        scale = self._slider_value_to_scale(slider_value)
+        self._update_density_display(scale)
+        self.padding_scale_changed.emit(scale)
+
+    def _on_follow_system_toggled(self, checked: bool):
+        """Enable/disable theme combo based on follow system setting."""
+        if self.theme_combo:
+            self.theme_combo.setEnabled(not checked)
+            if checked:
+                self.theme_combo.setToolTip("Theme is managed by system settings")
+            else:
+                self.theme_combo.setToolTip("")
+
     def update_appearance_settings(self, settings: Dict[str, Any]):
         """Update appearance settings display."""
         if self.theme_combo:
@@ -580,8 +600,10 @@ class SettingsView(QDialog):
                 self.theme_combo.blockSignals(block)
         if self.follow_system_checkbox:
             block = self.follow_system_checkbox.blockSignals(True)
-            self.follow_system_checkbox.setChecked(bool(settings.get('follow_system', False)))
+            is_following = bool(settings.get('follow_system', False))
+            self.follow_system_checkbox.setChecked(is_following)
             self.follow_system_checkbox.blockSignals(block)
+            self._on_follow_system_toggled(is_following)
         if self.font_size_slider:
             font_value = settings.get('font_size', 11)
             try:

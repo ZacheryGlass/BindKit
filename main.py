@@ -228,6 +228,9 @@ class MVCApplication:
             # Initialize application
             self.app_controller.initialize_application()
             
+            # Apply initial theme
+            self._apply_initial_theme()
+            
             # Log initial memory usage
             if self.memory_monitor:
                 memory_stats = self.memory_monitor.get_summary()
@@ -238,7 +241,35 @@ class MVCApplication:
         except Exception as e:
             self.logger.error(f"Error during MVC initialization: {e}")
             raise
-    
+
+    def _apply_initial_theme(self):
+        """Apply the configured theme on startup."""
+        try:
+            # We need to access settings directly since controllers might not be fully wired for this yet
+            # or we just want to ensure it happens early.
+            if not self._settings_manager:
+                self._settings_manager = SettingsManager()
+            
+            theme_manager = ThemeManager()
+            
+            preferred = self._settings_manager.get('appearance/theme', 'Slate')
+            follow_system = bool(self._settings_manager.get('appearance/follow_system', False))
+            
+            # Get font/padding settings
+            font_size = self._settings_manager.get('appearance/font_size', 11)
+            padding_scale = self._settings_manager.get('appearance/padding_scale', 1.0)
+            
+            effective = theme_manager.resolve_effective_theme(preferred, follow_system)
+            theme_manager.apply_theme(
+                effective, 
+                font_size=font_size, 
+                padding_scale=padding_scale
+            )
+            self.logger.info(f"Initial theme applied: {effective}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to apply initial theme: {e}")
+
     def finalize_startup(self):
         """Complete application startup"""
         self.app_controller.finalize_startup()
