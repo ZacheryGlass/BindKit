@@ -6,7 +6,7 @@ import subprocess
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 logger = logging.getLogger('Core.ScriptAnalyzer')
@@ -68,6 +68,10 @@ class ScriptInfo:
     is_executable: bool = False
     error: Optional[str] = None
     needs_configuration: bool = False
+    identifier: Optional[str] = None
+    legacy_keys: List[str] = field(default_factory=list)
+    is_external: bool = False
+    origin_path: Optional[Path] = None
 
     def __post_init__(self):
         if self.arguments is None:

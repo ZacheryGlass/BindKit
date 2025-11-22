@@ -97,9 +97,10 @@ class TrayController(QObject):
                 original_name = script_info.display_name
                 # Status by original name
                 status = self._script_controller.get_script_status(original_name)
-                # Hotkey lookup by file stem identifier
-                stem = script_info.file_path.stem if hasattr(script_info, 'file_path') else None
-                hotkey = self._script_controller.get_script_hotkey(stem) if stem else None
+                # Hotkey lookup uses canonical identifier (falls back internally)
+                identifier = getattr(script_info, 'identifier', None)
+                lookup_key = identifier or (script_info.file_path.stem if hasattr(script_info, 'file_path') else None)
+                hotkey = self._script_controller.get_script_hotkey(lookup_key) if lookup_key else None
                 
                 # Track max length for scripts with hotkeys
                 if hotkey:

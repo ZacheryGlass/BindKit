@@ -18,6 +18,7 @@ class ScriptLoader:
     def __init__(self, scripts_directory: str = "scripts"):
         self.scripts_directory = Path(scripts_directory)
         self.loaded_scripts: Dict[str, ScriptInfo] = {}
+        self.legacy_aliases: Dict[str, List[str]] = {}
         self.failed_scripts: Dict[str, str] = {}
         self.settings = SettingsManager()
         self.analyzer = ScriptAnalyzer()
@@ -28,6 +29,8 @@ class ScriptLoader:
         logger.info(f"Discovering scripts in: {self.scripts_directory}")
         scripts = []
         self.failed_scripts.clear()
+        self.loaded_scripts.clear()
+        self.legacy_aliases.clear()
         
         # Use ThreadPoolExecutor for parallel script discovery
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
@@ -58,6 +61,7 @@ class ScriptLoader:
         """Discover scripts from the default scripts directory."""
         logger.debug(f"Discovering default scripts in: {self.scripts_directory}")
         scripts = []
+        analyzed_scripts = []
         
         if not self.scripts_directory.exists():
             logger.warning(f"Scripts directory does not exist, creating: {self.scripts_directory}")
@@ -91,8 +95,7 @@ class ScriptLoader:
                 try:
                     script_info = future.result(timeout=5)
                     if script_info and script_info.is_executable:
-                        scripts.append(script_info)
-                        self.loaded_scripts[script_file.stem] = script_info
+                        analyzed_scripts.append((script_file, script_info))
                         logger.info(f"Successfully analyzed default script: {script_file.name}")
                     elif script_info:
                         error_msg = f"Script not executable: {script_info.error}"
@@ -103,8 +106,58 @@ class ScriptLoader:
                     self.failed_scripts[script_file.name] = error_msg
                     logger.error(f"Error analyzing default script: {error_msg}")
         
+        # Assign identifiers and register loaded scripts
+        for script_file, script_info in analyzed_scripts:
+            identifier = self._generate_default_identifier(script_file)
+            script_info.identifier = identifier
+            script_info.legacy_keys = [script_file.stem]
+            script_info.is_external = False
+            script_info.origin_path = script_file
+            scripts.append(script_info)
+            self.loaded_scripts[identifier] = script_info
+
+            normalized_stem = script_file.stem.lower()
+            alias_list = self.legacy_aliases.setdefault(normalized_stem, [])
+            if identifier not in alias_list:
+                alias_list.append(identifier)
+
+            identifier_alias = self.legacy_aliases.setdefault(identifier, [])
+            if identifier not in identifier_alias:
+                identifier_alias.append(identifier)
+
+            logger.debug(f"Registered default script identifier: {identifier} -> {script_file.name}")
+        
         logger.info(f"Default script discovery: {len(scripts)} loaded")
         return scripts
+
+    def _generate_default_identifier(self, script_file: Path) -> str:
+        """Generate a unique identifier for a default script based on name and extension."""
+        stem = script_file.stem
+        suffix = script_file.suffix.lower()
+        if suffix:
+            identifier = f"{stem}{suffix}"
+        else:
+            identifier = stem
+        return identifier.lower()
+
+    def _resolve_script_identifier(self, name: Optional[str]) -> Optional[str]:
+        """Resolve a provided script name (identifier or legacy) to the canonical identifier."""
+        if not name:
+            return None
+        if name in self.loaded_scripts:
+            return name
+        normalized = name.lower()
+        if normalized in self.loaded_scripts:
+            return normalized
+        aliases = self.legacy_aliases.get(normalized)
+        if not aliases:
+            return None
+        if len(aliases) > 1:
+            logger.warning(
+                f"Ambiguous script reference '{name}' matches multiple scripts: {aliases}. "
+                "Using the first match."
+            )
+        return aliases[0]
     
     def _analyze_single_script(self, script_file: Path) -> Optional[ScriptInfo]:
         """Analyze a single script file. Thread-safe method for parallel execution."""
@@ -152,8 +205,25 @@ class ScriptLoader:
                     if script_info and script_info.is_executable:
                         # Override the display name with the configured name
                         script_info.display_name = script_name
+                        script_info.identifier = script_name.lower()
+                        script_info.legacy_keys = [script_info.file_path.stem]
+                        script_info.is_external = True
+                        script_info.origin_path = Path(script_path)
                         scripts.append(script_info)
-                        self.loaded_scripts[script_name] = script_info
+                        self.loaded_scripts[script_info.identifier] = script_info
+
+                        script_aliases = self.legacy_aliases.setdefault(script_name.lower(), [])
+                        if script_info.identifier not in script_aliases:
+                            script_aliases.append(script_info.identifier)
+
+                        stem_aliases = self.legacy_aliases.setdefault(script_info.file_path.stem.lower(), [])
+                        if script_info.identifier not in stem_aliases:
+                            stem_aliases.append(script_info.identifier)
+
+                        identifier_alias = self.legacy_aliases.setdefault(script_info.identifier.lower(), [])
+                        if script_info.identifier not in identifier_alias:
+                            identifier_alias.append(script_info.identifier)
+
                         logger.info(f"Successfully analyzed external script: {script_name} -> {script_path}")
                     elif script_info:
                         error_msg = f"External script not executable: {script_info.error}"
@@ -182,17 +252,18 @@ class ScriptLoader:
     
     def execute_script(self, script_name: str, arguments: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Execute a script by name with provided arguments."""
-        if script_name not in self.loaded_scripts:
+        identifier = self._resolve_script_identifier(script_name)
+        if not identifier or identifier not in self.loaded_scripts:
             return {
                 'success': False,
                 'message': f'Script "{script_name}" not found'
             }
         
-        script_info = self.loaded_scripts[script_name]
+        script_info = self.loaded_scripts[identifier]
         
         # Get arguments from settings if not provided
         if arguments is None:
-            arguments = self.get_script_arguments(script_name)
+            arguments = self.get_script_arguments(identifier)
         
         # Validate arguments
         validation_errors = self.executor.validate_arguments(script_info, arguments)
@@ -231,7 +302,10 @@ class ScriptLoader:
         return self.discover_scripts()
     
     def get_script(self, name: str) -> Optional[ScriptInfo]:
-        return self.loaded_scripts.get(name)
+        identifier = self._resolve_script_identifier(name)
+        if identifier:
+            return self.loaded_scripts.get(identifier)
+        return None
     
     def get_failed_scripts(self) -> Dict[str, str]:
         return self.failed_scripts.copy()
@@ -247,18 +321,33 @@ class ScriptLoader:
     
     def get_script_arguments(self, script_name: str) -> Dict[str, Any]:
         """Get configured arguments for a script from settings."""
-        return self.settings.get_script_arguments(script_name)
+        identifier = self._resolve_script_identifier(script_name) or script_name
+        arguments = self.settings.get_script_arguments(identifier)
+        if arguments:
+            return arguments
+
+        script_info = self.get_script(identifier)
+        if script_info:
+            for legacy in script_info.legacy_keys:
+                legacy_args = self.settings.get_script_arguments(legacy)
+                if legacy_args:
+                    logger.debug(f"Loading arguments for {identifier} from legacy key '{legacy}'")
+                    return legacy_args
+
+        return arguments
     
     def set_script_arguments(self, script_name: str, arguments: Dict[str, Any]):
         """Save arguments configuration for a script to settings."""
-        self.settings.set_script_arguments(script_name, arguments)
+        identifier = self._resolve_script_identifier(script_name) or script_name
+        self.settings.set_script_arguments(identifier, arguments)
     
     def get_script_status(self, script_name: str) -> str:
         """Get current status of a script."""
-        if script_name not in self.loaded_scripts:
+        identifier = self._resolve_script_identifier(script_name)
+        if not identifier or identifier not in self.loaded_scripts:
             return "Not Found"
         
-        script_info = self.loaded_scripts[script_name]
+        script_info = self.loaded_scripts[identifier]
         return self.executor.get_script_status(script_info)
     
     def get_all_scripts(self) -> List[ScriptInfo]:
@@ -267,35 +356,39 @@ class ScriptLoader:
     
     def is_external_script(self, script_name: str) -> bool:
         """Check if a script is an external script (loaded from external path)."""
+        script_info = self.get_script(script_name)
+        if script_info:
+            return script_info.is_external
         external_scripts = self.settings.get_external_scripts()
         return script_name in external_scripts
     
     def get_external_script_path(self, script_name: str) -> Optional[str]:
         """Get the external path for an external script."""
+        script_info = self.get_script(script_name)
+        if script_info and script_info.is_external and script_info.origin_path:
+            return str(script_info.origin_path)
         return self.settings.get_external_script_path(script_name)
     
     def refresh_external_scripts(self) -> List[ScriptInfo]:
         """Refresh only external scripts without affecting default scripts."""
         logger.info("Refreshing external scripts")
         
-        # First, identify all currently loaded external scripts
-        # These are scripts that are NOT in the default scripts directory
-        default_script_names = set()
-        if self.scripts_directory.exists():
-            for script_file in self.scripts_directory.glob("*.py"):
-                if not script_file.name.startswith("__"):
-                    default_script_names.add(script_file.stem)
+        # Remove all currently loaded external scripts
+        removed_identifiers = []
+        for identifier, script_info in list(self.loaded_scripts.items()):
+            if script_info.is_external:
+                removed_identifiers.append(identifier)
+                logger.debug(f"Removing external script from loaded cache: {identifier}")
+                del self.loaded_scripts[identifier]
         
-        # Remove ALL external scripts from loaded_scripts (not just the ones still in settings)
-        scripts_to_remove = []
-        for script_name, script_info in self.loaded_scripts.items():
-            # If it's not a default script, it must be external
-            if script_name not in default_script_names:
-                scripts_to_remove.append(script_name)
-        
-        for script_name in scripts_to_remove:
-            logger.debug(f"Removing external script from loaded: {script_name}")
-            del self.loaded_scripts[script_name]
+        if removed_identifiers:
+            # Clean up alias entries pointing to removed scripts
+            for alias, identifiers in list(self.legacy_aliases.items()):
+                filtered = [i for i in identifiers if i not in removed_identifiers]
+                if filtered:
+                    self.legacy_aliases[alias] = filtered
+                else:
+                    del self.legacy_aliases[alias]
         
         # Remove external script failures from failed_scripts
         failed_keys_to_remove = [key for key in self.failed_scripts.keys() if "(external)" in key]

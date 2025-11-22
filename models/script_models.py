@@ -122,22 +122,41 @@ class ScriptCollectionModel(QObject):
     def get_script_by_name(self, name: str) -> Optional[ScriptInfo]:
         """Get script info by name.
 
-        Accepts either the display name (e.g., "Display Toggle") or the file stem
-        identifier used for hotkeys and settings (e.g., "display_toggle").
+        Accepts the display name, new canonical identifier (name+extension),
+        or legacy file stem used by older settings/hotkey mappings.
         """
         # First, try exact display name match
         for script in self._all_scripts:
             if script.display_name == name:
                 return script
+        
+        normalized_name = (name or "").strip().lower()
+        if not normalized_name:
+            return None
+
+        # Try canonical identifier match
+        for script in self._all_scripts:
+            identifier = getattr(script, 'identifier', None)
+            if identifier and identifier == normalized_name:
+                return script
 
         # Fallback: try file stem match (hotkey/settings use stems)
-        lname = (name or "").strip().lower()
         for script in self._all_scripts:
             try:
-                if script.file_path.stem.lower() == lname:
+                if script.file_path.stem.lower() == normalized_name:
                     return script
             except Exception:
                 pass
+
+        # Final fallback: check legacy aliases if present
+        for script in self._all_scripts:
+            try:
+                legacy_keys = getattr(script, 'legacy_keys', [])
+                for legacy in legacy_keys:
+                    if legacy.lower() == normalized_name:
+                        return script
+            except Exception:
+                continue
         return None
     
     def is_script_disabled(self, script_name: str) -> bool:
@@ -297,11 +316,10 @@ class ScriptExecutionModel(QObject):
             logger.info(f"Executing script: {script_name} (async={async_execution})")
             self.script_execution_started.emit(script_name)
 
-            # Determine script key for execution
-            if self._script_collection.is_external_script(script_name):
-                script_key = script_name  # Use display name for external scripts
-            else:
-                script_key = script_info.file_path.stem  # Use file stem for default scripts
+            # Determine script key for execution (canonical identifier)
+            script_key = getattr(script_info, 'identifier', None)
+            if not script_key:
+                script_key = script_info.file_path.stem.lower()
 
             if async_execution:
                 # Create and start worker thread
@@ -461,7 +479,7 @@ class ScriptExecutionModel(QObject):
                 return False
             
             # Get script key for settings lookup
-            script_key = script_info.file_path.stem
+            script_key = getattr(script_info, 'identifier', None) or script_info.file_path.stem.lower()
             preset_args = self._settings.get_preset_arguments(script_key, preset_name)
             
             logger.info(f"Executing script {script_name} with preset '{preset_name}': {preset_args}")
@@ -478,10 +496,7 @@ class ScriptExecutionModel(QObject):
         # Simplified: directly get status without caching
         script_info = self._script_collection.get_script_by_name(script_name)
         if script_info:
-            if self._script_collection.is_external_script(script_name):
-                script_key = script_name
-            else:
-                script_key = script_info.file_path.stem
+            script_key = getattr(script_info, 'identifier', None) or script_info.file_path.stem.lower()
             
             status = self._script_loader.get_script_status(script_key)
             return status or "Ready"
@@ -496,7 +511,7 @@ class ScriptExecutionModel(QObject):
         """Check if notifications should be shown for a script"""
         script_info = self._script_collection.get_script_by_name(script_name)
         if script_info:
-            script_key = script_info.file_path.stem
+            script_key = getattr(script_info, 'identifier', None) or script_info.file_path.stem.lower()
             return self._settings.should_show_script_notifications(script_key)
         return True
 

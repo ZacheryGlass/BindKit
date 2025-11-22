@@ -743,14 +743,63 @@ class SettingsManager(QObject):
             self.settings.endGroup()
 
     # Schedule configuration methods
+    def _schedule_primary_key(self, script_name: str) -> Optional[str]:
+        """Normalize script name for schedule storage (lowercase, includes extension)."""
+        if not script_name:
+            return None
+        normalized = script_name.strip()
+        if not normalized:
+            return None
+        return normalized.lower()
+
+    def _schedule_lookup_keys(self, script_name: str) -> List[str]:
+        """Return ordered list of schedule keys to try (new canonical + legacy forms)."""
+        candidates: List[str] = []
+        if not script_name:
+            return candidates
+
+        original = script_name.strip()
+        if not original:
+            return candidates
+        candidates.append(original)
+
+        lower = original.lower()
+        if lower not in candidates:
+            candidates.append(lower)
+
+        if '.' in original:
+            base_original = original.split('.', 1)[0]
+            if base_original and base_original not in candidates:
+                candidates.append(base_original)
+        if '.' in lower:
+            base_lower = lower.split('.', 1)[0]
+            if base_lower and base_lower not in candidates:
+                candidates.append(base_lower)
+
+        # Remove duplicates while preserving order
+        seen = set()
+        ordered = []
+        for candidate in candidates:
+            if candidate not in seen:
+                ordered.append(candidate)
+                seen.add(candidate)
+        return ordered
+
     def is_script_scheduled(self, script_name: str) -> bool:
         """Check if a script has scheduling enabled."""
-        return self.get(f'schedule_config/{script_name}/enabled', False)
+        for key in self._schedule_lookup_keys(script_name):
+            setting_key = f'schedule_config/{key}/enabled'
+            if self.settings.contains(setting_key):
+                return bool(self.get(setting_key, False))
+        return False
 
     def set_schedule_enabled(self, script_name: str, enabled: bool) -> None:
         """Enable or disable scheduling for a script."""
-        self.set(f'schedule_config/{script_name}/enabled', enabled)
-        logger.info(f"Script '{script_name}' schedule: {enabled}")
+        key = self._schedule_primary_key(script_name)
+        if not key:
+            return
+        self.set(f'schedule_config/{key}/enabled', enabled)
+        logger.info(f"Script '{key}' schedule: {enabled}")
 
     def get_schedule_config(self, script_name: str) -> Dict[str, Any]:
         """Get complete schedule configuration for a script.
@@ -769,43 +818,68 @@ class SettingsManager(QObject):
 
     def set_schedule_config(self, script_name: str, config: Dict[str, Any]) -> None:
         """Set schedule configuration for a script."""
+        primary = self._schedule_primary_key(script_name)
+        if not primary:
+            return
         for key, value in config.items():
-            self.set(f'schedule_config/{script_name}/{key}', value)
-        logger.info(f"Updated schedule config for '{script_name}': {config}")
+            self.set(f'schedule_config/{primary}/{key}', value)
+        logger.info(f"Updated schedule config for '{primary}': {config}")
 
     def get_schedule_type(self, script_name: str) -> str:
         """Get the schedule type (interval or cron) for a script's schedule."""
-        return self.get(f'schedule_config/{script_name}/schedule_type', 'interval')
+        for key in self._schedule_lookup_keys(script_name):
+            setting_key = f'schedule_config/{key}/schedule_type'
+            if self.settings.contains(setting_key):
+                return self.get(setting_key, 'interval')
+        return 'interval'
 
     def set_schedule_type(self, script_name: str, schedule_type: str) -> None:
         """Set the schedule type (interval or cron) for a script's schedule."""
         # Validate schedule type
         if schedule_type not in ('interval', 'cron'):
             raise ValueError(f"Invalid schedule type: {schedule_type}")
-        self.set(f'schedule_config/{script_name}/schedule_type', schedule_type)
+        primary = self._schedule_primary_key(script_name)
+        if primary:
+            self.set(f'schedule_config/{primary}/schedule_type', schedule_type)
 
     def get_cron_expression(self, script_name: str) -> Optional[str]:
         """Get the CRON expression for a script's schedule."""
-        return self.get(f'schedule_config/{script_name}/cron_expression', None)
+        for key in self._schedule_lookup_keys(script_name):
+            setting_key = f'schedule_config/{key}/cron_expression'
+            if self.settings.contains(setting_key):
+                return self.get(setting_key, None)
+        return None
 
     def set_cron_expression(self, script_name: str, cron_expression: Optional[str]) -> None:
         """Set the CRON expression for a script's schedule."""
+        primary = self._schedule_primary_key(script_name)
+        if not primary:
+            return
         if cron_expression is None:
             # Remove the CRON expression if setting to None
-            key = f'schedule_config/{script_name}/cron_expression'
+            key = f'schedule_config/{primary}/cron_expression'
             if self.settings.contains(key):
                 self.settings.remove(key)
                 self.settings.sync()
         else:
-            self.set(f'schedule_config/{script_name}/cron_expression', cron_expression)
+            self.set(f'schedule_config/{primary}/cron_expression', cron_expression)
 
     def set_schedule_interval(self, script_name: str, interval_seconds: int) -> None:
         """Set the interval for a script's schedule."""
-        self.set(f'schedule_config/{script_name}/interval_seconds', interval_seconds)
+        primary = self._schedule_primary_key(script_name)
+        if primary:
+            self.set(f'schedule_config/{primary}/interval_seconds', interval_seconds)
 
     def get_schedule_interval(self, script_name: str) -> int:
         """Get the interval (in seconds) for a script's schedule."""
-        value = self.get(f'schedule_config/{script_name}/interval_seconds', 3600)
+        value = None
+        for key in self._schedule_lookup_keys(script_name):
+            setting_key = f'schedule_config/{key}/interval_seconds'
+            if self.settings.contains(setting_key):
+                value = self.get(setting_key, 3600)
+                break
+        if value is None:
+            value = 3600
         # Handle case where interval might be stored as string
         if isinstance(value, str):
             try:
@@ -816,11 +890,18 @@ class SettingsManager(QObject):
 
     def set_schedule_last_run(self, script_name: str, timestamp: Optional[float]) -> None:
         """Update the last run timestamp for a scheduled script."""
-        self.set(f'schedule_config/{script_name}/last_run', timestamp)
+        primary = self._schedule_primary_key(script_name)
+        if primary:
+            self.set(f'schedule_config/{primary}/last_run', timestamp)
 
     def get_schedule_last_run(self, script_name: str) -> Optional[float]:
         """Get the last run timestamp for a scheduled script."""
-        value = self.get(f'schedule_config/{script_name}/last_run', None)
+        value = None
+        for key in self._schedule_lookup_keys(script_name):
+            setting_key = f'schedule_config/{key}/last_run'
+            if self.settings.contains(setting_key):
+                value = self.get(setting_key, None)
+                break
         # Handle case where timestamp might be stored as string
         if isinstance(value, str):
             try:
@@ -831,11 +912,18 @@ class SettingsManager(QObject):
 
     def set_schedule_next_run(self, script_name: str, timestamp: Optional[float]) -> None:
         """Update the next run timestamp for a scheduled script."""
-        self.set(f'schedule_config/{script_name}/next_run', timestamp)
+        primary = self._schedule_primary_key(script_name)
+        if primary:
+            self.set(f'schedule_config/{primary}/next_run', timestamp)
 
     def get_schedule_next_run(self, script_name: str) -> Optional[float]:
         """Get the next run timestamp for a scheduled script."""
-        value = self.get(f'schedule_config/{script_name}/next_run', None)
+        value = None
+        for key in self._schedule_lookup_keys(script_name):
+            setting_key = f'schedule_config/{key}/next_run'
+            if self.settings.contains(setting_key):
+                value = self.get(setting_key, None)
+                break
         # Handle case where timestamp might be stored as string
         if isinstance(value, str):
             try:
@@ -858,13 +946,19 @@ class SettingsManager(QObject):
 
     def remove_schedule_config(self, script_name: str) -> None:
         """Remove all schedule configuration for a script."""
-        self.settings.beginGroup(f'schedule_config/{script_name}')
-        try:
-            self.settings.remove('')
+        removed_any = False
+        for key in self._schedule_lookup_keys(script_name):
+            self.settings.beginGroup(f'schedule_config/{key}')
+            try:
+                if self.settings.childKeys() or self.settings.childGroups():
+                    self.settings.remove('')
+                    removed_any = True
+            finally:
+                self.settings.endGroup()
+
+        if removed_any:
             self.settings.sync()
             logger.info(f"Removed schedule config for '{script_name}'")
-        finally:
-            self.settings.endGroup()
 
     # System hotkeys methods
     def get_show_menu_hotkey(self) -> str:

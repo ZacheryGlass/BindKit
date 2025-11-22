@@ -185,11 +185,15 @@ class ScriptController(QObject):
         script_info = self._script_collection.get_script_by_name(script_name)
         if not script_info:
             return False
+        identifier = self._get_script_identifier(script_info)
         try:
-            stem = script_info.file_path.stem
-            return self._script_collection._settings.has_script_presets(stem)
+            return self._script_collection._settings.has_script_presets(identifier)
         except Exception:
             return False
+
+    def _get_script_identifier(self, script_info) -> str:
+        """Return canonical key used for settings lookups."""
+        return getattr(script_info, 'identifier', None) or script_info.file_path.stem.lower()
 
     # Public helpers for presets (used by tray controller)
     def has_presets(self, script_name: str) -> bool:
@@ -202,8 +206,8 @@ class ScriptController(QObject):
         if not script_info:
             return []
         try:
-            stem = script_info.file_path.stem
-            return self._script_collection._settings.get_script_preset_names(stem)
+            identifier = self._get_script_identifier(script_info)
+            return self._script_collection._settings.get_script_preset_names(identifier)
         except Exception:
             return []
 
@@ -264,8 +268,8 @@ class ScriptController(QObject):
             logger.error("Script executor not available")
             return False
 
-        script_stem = script_info.file_path.stem
-        result = executor.stop_scheduled_execution(script_stem)
+        script_key = self._get_script_identifier(script_info)
+        result = executor.stop_scheduled_execution(script_key)
 
         if result.success:
             logger.info(f"Schedule stopped for {script_name}")
@@ -327,8 +331,8 @@ class ScriptController(QObject):
         if not executor:
             return False
 
-        script_stem = script_info.file_path.stem
-        return executor.is_schedule_running(script_stem)
+        script_key = self._get_script_identifier(script_info)
+        return executor.is_schedule_running(script_key)
 
     def get_schedule_config(self, script_name: str) -> Optional[Dict[str, Any]]:
         """Get schedule configuration for a script.
@@ -343,8 +347,8 @@ class ScriptController(QObject):
         if not script_info:
             return None
 
-        script_stem = script_info.file_path.stem
-        return self._script_collection._settings.get_schedule_config(script_stem)
+        script_key = self._get_script_identifier(script_info)
+        return self._script_collection._settings.get_schedule_config(script_key)
 
     def set_schedule_config(self, script_name: str, config: Dict[str, Any]) -> bool:
         """Set schedule configuration for a script.
@@ -361,9 +365,9 @@ class ScriptController(QObject):
             logger.error(f"Script not found for schedule config: {script_name}")
             return False
 
-        script_stem = script_info.file_path.stem
+        script_key = self._get_script_identifier(script_info)
         try:
-            self._script_collection._settings.set_schedule_config(script_stem, config)
+            self._script_collection._settings.set_schedule_config(script_key, config)
             logger.info(f"Schedule config for {script_name} updated: {config}")
             return True
         except Exception as e:
@@ -385,9 +389,9 @@ class ScriptController(QObject):
             logger.error(f"Script not found for schedule enable/disable: {script_name}")
             return False
 
-        script_stem = script_info.file_path.stem
+        script_key = self._get_script_identifier(script_info)
         try:
-            self._script_collection._settings.set_schedule_enabled(script_stem, enabled)
+            self._script_collection._settings.set_schedule_enabled(script_key, enabled)
             logger.info(f"Schedule for {script_name} set to enabled={enabled}")
             return True
         except Exception as e:
