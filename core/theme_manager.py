@@ -13,18 +13,11 @@ class ThemeManager:
     Load and apply application QSS themes with safe fallback.
 
     - Supports named themes located under `resources/themes/<name>.qss`
-    - Optional system theme mapping when "follow system" is enabled
     - Applies instantly across the app via QApplication.setStyleSheet
     """
 
     THEMES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'resources', 'themes')
     DEFAULT_THEME_NAME = 'Slate'
-
-    # Mapping for system theme preference to named themes
-    SYSTEM_MAP = {
-        'dark': 'Onyx',
-        'light': 'Quartz',
-    }
 
     FONT_MIN = 9
     FONT_MAX = 18
@@ -60,27 +53,8 @@ class ThemeManager:
             logger.warning(f"Failed to load theme '{theme_name}': {e}")
             return None
 
-    def detect_system_mode(self) -> str:
-        """Return 'dark' or 'light' based on Windows AppsUseLightTheme registry.
-
-        Defaults to 'light' if detection fails.
-        """
-        try:
-            import winreg
-            key_path = r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
-                value, _ = winreg.QueryValueEx(key, 'AppsUseLightTheme')
-                return 'light' if int(value) == 1 else 'dark'
-        except Exception as e:
-            logger.debug(f"System theme detection failed: {e}")
-            return 'light'
-
-    def resolve_effective_theme(self, preferred_theme: str, follow_system: bool) -> str:
-        if follow_system:
-            mode = self.detect_system_mode()
-            mapped = self.SYSTEM_MAP.get(mode)
-            if mapped:
-                return mapped
+    def resolve_effective_theme(self, preferred_theme: str) -> str:
+        """Resolve the effective theme name from user preference."""
         return preferred_theme or self.DEFAULT_THEME_NAME
 
     def apply_theme(

@@ -73,7 +73,6 @@ class SettingsView(QDialog):
 
     # Appearance
     theme_changed = pyqtSignal(str)
-    follow_system_theme_changed = pyqtSignal(bool)
     font_size_changed = pyqtSignal(int)
     padding_scale_changed = pyqtSignal(float)
     launcher_show_hotkeys_changed = pyqtSignal(bool)
@@ -107,7 +106,6 @@ class SettingsView(QDialog):
 
         # Appearance controls
         self.theme_combo = None
-        self.follow_system_checkbox = None
         self.font_size_slider = None
         self.launcher_show_hotkeys_checkbox = None
         self.font_size_value_label = None
@@ -245,11 +243,6 @@ class SettingsView(QDialog):
 
         theme_group = QGroupBox()
         theme_layout = QVBoxLayout()
-
-        # Follow system option
-        self.follow_system_checkbox = QCheckBox("Follow system theme (Windows)")
-        self.follow_system_checkbox.toggled.connect(self.follow_system_theme_changed.emit)
-        theme_layout.addWidget(self.follow_system_checkbox)
 
         # Theme selection
         row = QHBoxLayout()
@@ -590,18 +583,6 @@ class SettingsView(QDialog):
             tooltip = f"Current hotkey: {hotkey}\nClick to change" if hotkey else "No hotkey set. Click to change"
             self.show_menu_hotkey_btn.setToolTip(tooltip)
 
-    def _on_follow_system_toggled(self, checked: bool):
-        """Enable/disable theme combo based on follow system setting."""
-        logger.info(f"_on_follow_system_toggled called with checked={checked}")
-        if self.theme_combo:
-            enabled_state = not checked
-            logger.info(f"Setting theme combo enabled state to: {enabled_state}")
-            self.theme_combo.setEnabled(enabled_state)
-            if checked:
-                self.theme_combo.setToolTip("Theme is managed by system settings")
-            else:
-                self.theme_combo.setToolTip("")
-
     def update_appearance_settings(self, settings: Dict[str, Any]):
         """Update appearance settings display."""
         logger.info(f"update_appearance_settings called, combo has {self.theme_combo.count() if self.theme_combo else 'None'} items")
@@ -616,14 +597,6 @@ class SettingsView(QDialog):
                 logger.debug(f"Set theme combo to '{theme}' at index {idx}")
             else:
                 logger.warning(f"Theme '{theme}' not found in combo box")
-        if self.follow_system_checkbox:
-            block = self.follow_system_checkbox.blockSignals(True)
-            is_following = bool(settings.get('follow_system', False))
-            logger.info(f"Follow system setting: {is_following} (raw value: {settings.get('follow_system')})")
-            self.follow_system_checkbox.setChecked(is_following)
-            self.follow_system_checkbox.blockSignals(block)
-            logger.debug(f"Calling _on_follow_system_toggled({is_following}) - will {'disable' if is_following else 'enable'} theme combo")
-            self._on_follow_system_toggled(is_following)
         if self.font_size_slider:
             font_value = settings.get('font_size', 11)
             try:

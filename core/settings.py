@@ -16,7 +16,6 @@ class SettingsManager(QObject):
         },
         'appearance': {
             'theme': 'Slate',
-            'follow_system': False,
             'font_size': 11,
             'padding_scale': 1.0
         },

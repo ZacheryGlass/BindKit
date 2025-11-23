@@ -251,18 +251,17 @@ class MVCApplication:
                 self._settings_manager = SettingsManager()
             
             theme_manager = ThemeManager()
-            
+
             preferred = self._settings_manager.get('appearance/theme', 'Slate')
-            follow_system = bool(self._settings_manager.get('appearance/follow_system', False))
-            
+
             # Get font/padding settings
             font_size = self._settings_manager.get('appearance/font_size', 11)
             padding_scale = self._settings_manager.get('appearance/padding_scale', 1.0)
-            
-            effective = theme_manager.resolve_effective_theme(preferred, follow_system)
+
+            effective = theme_manager.resolve_effective_theme(preferred)
             theme_manager.apply_theme(
-                effective, 
-                font_size=font_size, 
+                effective,
+                font_size=font_size,
                 padding_scale=padding_scale
             )
             self.logger.info(f"Initial theme applied: {effective}")
@@ -725,7 +724,6 @@ class MVCApplication:
         self._settings_view.test_all_hotkeys_requested.connect(self._settings_controller.validate_all_hotkeys)
         # Appearance
         self._settings_view.theme_changed.connect(self._settings_controller.set_theme)
-        self._settings_view.follow_system_theme_changed.connect(self._settings_controller.set_follow_system_theme)
         self._settings_view.font_size_changed.connect(self._settings_controller.set_font_size)
         self._settings_view.padding_scale_changed.connect(self._settings_controller.set_padding_scale)
         self._settings_view.launcher_show_hotkeys_changed.connect(self._settings_controller.set_launcher_show_hotkeys)
@@ -1134,8 +1132,7 @@ def main():
         def _apply_theme_from_settings():
             try:
                 preferred = theme_settings.get('appearance/theme', ThemeManager.DEFAULT_THEME_NAME)
-                follow = bool(theme_settings.get('appearance/follow_system', False))
-                effective = theme_manager.resolve_effective_theme(preferred, follow)
+                effective = theme_manager.resolve_effective_theme(preferred)
                 font_pref = theme_settings.get('appearance/font_size', 11)
                 padding_pref = theme_settings.get('appearance/padding_scale', 1.0)
                 try:
@@ -1154,7 +1151,7 @@ def main():
                 )
                 logger.info(
                     "Theme applied "
-                    f"(preferred={preferred}, follow_system={follow}, effective={effective}, "
+                    f"(preferred={preferred}, effective={effective}, "
                     f"font={font_pref}, padding={padding_pref})"
                 )
             except Exception as e_inner:
