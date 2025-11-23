@@ -89,7 +89,17 @@ class ScriptLauncherWidget(QWidget):
         menu_bg_color = None
         menu_border_color = None
         menu_text_color = None
+        widget_text_color = None
 
+        # Parse QWidget base text color
+        widget_match = re.search(r'QWidget[^{]*\{([^}]+)\}', stylesheet, re.DOTALL)
+        if widget_match:
+            widget_section = widget_match.group(1)
+            widget_color_match = re.search(r'color:\s*([#\w]+)', widget_section)
+            if widget_color_match:
+                widget_text_color = widget_color_match.group(1)
+
+        # Parse QMenu colors
         menu_match = re.search(r'QMenu[^{]*\{([^}]+)\}', stylesheet, re.DOTALL)
         if menu_match:
             menu_section = menu_match.group(1)
@@ -117,7 +127,8 @@ class ScriptLauncherWidget(QWidget):
 
         bg_rgba = hex_to_rgba(menu_bg_color, 0.95)
         border_rgba = hex_to_rgba(menu_border_color, 0.3) if menu_border_color else "rgba(255, 255, 255, 0.2)"
-        text_color = menu_text_color if menu_text_color else "#FFFFFF"
+        # Use QMenu color if specified, otherwise fall back to QWidget color
+        text_color = menu_text_color or widget_text_color or "#E5F5EF"
 
         self.setStyleSheet(f"""
             ScriptLauncherWidget {{
