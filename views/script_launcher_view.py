@@ -88,6 +88,7 @@ class ScriptLauncherWidget(QWidget):
         import re
         menu_bg_color = None
         menu_border_color = None
+        menu_text_color = None
 
         menu_match = re.search(r'QMenu[^{]*\{([^}]+)\}', stylesheet, re.DOTALL)
         if menu_match:
@@ -98,6 +99,9 @@ class ScriptLauncherWidget(QWidget):
             border_match = re.search(r'border:\s*[^;]*\s+([#\w]+)', menu_section)
             if border_match:
                 menu_border_color = border_match.group(1)
+            color_match = re.search(r'color:\s*([#\w]+)', menu_section)
+            if color_match:
+                menu_text_color = color_match.group(1)
 
         # Convert hex colors to RGBA with transparency
         def hex_to_rgba(hex_color: str, alpha: float = 0.95) -> str:
@@ -113,12 +117,14 @@ class ScriptLauncherWidget(QWidget):
 
         bg_rgba = hex_to_rgba(menu_bg_color, 0.95)
         border_rgba = hex_to_rgba(menu_border_color, 0.3) if menu_border_color else "rgba(255, 255, 255, 0.2)"
+        text_color = menu_text_color if menu_text_color else "#FFFFFF"
 
         self.setStyleSheet(f"""
             ScriptLauncherWidget {{
                 background-color: {bg_rgba};
                 border: 1px solid {border_rgba};
                 border-radius: 12px;
+                color: {text_color};
             }}
             QLineEdit {{
                 background-color: rgba(255, 255, 255, 0.1);
@@ -126,6 +132,7 @@ class ScriptLauncherWidget(QWidget):
                 border-radius: 6px;
                 padding: 8px 12px;
                 font-size: 14px;
+                color: {text_color};
             }}
             QLineEdit:focus {{
                 border: 1px solid rgba(255, 255, 255, 0.4);
@@ -134,11 +141,13 @@ class ScriptLauncherWidget(QWidget):
                 background-color: transparent;
                 border: none;
                 outline: none;
+                color: {text_color};
             }}
             QListWidget::item {{
                 padding: 10px 12px;
                 border-radius: 6px;
                 margin: 2px 0px;
+                color: {text_color};
             }}
             QListWidget::item:hover {{
                 background-color: rgba(255, 255, 255, 0.1);

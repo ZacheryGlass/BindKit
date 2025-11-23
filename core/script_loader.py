@@ -54,6 +54,9 @@ class ScriptLoader:
         # Ensure deterministic ordering regardless of async completion order
         scripts.sort(key=lambda info: info.display_name.lower())
 
+        # Resolve display name collisions by adding type prefixes only where needed
+        self._resolve_display_name_collisions(scripts)
+
         logger.info(f"Script discovery complete: {len(scripts)} total scripts loaded, {len(self.failed_scripts)} failed")
         return scripts
     
@@ -139,6 +142,47 @@ class ScriptLoader:
         else:
             identifier = stem
         return identifier.lower()
+
+    def _resolve_display_name_collisions(self, scripts: List[ScriptInfo]):
+        """
+        Detect scripts with identical display names and append type prefixes to disambiguate them.
+        
+        Args:
+            scripts: List of ScriptInfo objects to check and modify in-place.
+        """
+        # Group scripts by their current display name
+        from collections import defaultdict
+        name_groups = defaultdict(list)
+        
+        for script in scripts:
+            name_groups[script.display_name].append(script)
+            
+        # Process groups with collisions
+        for display_name, group in name_groups.items():
+            if len(group) > 1:
+                logger.info(f"Found collision for display name '{display_name}' with {len(group)} scripts")
+                
+                for script in group:
+                    # Determine prefix based on file extension
+                    prefix = ""
+                    suffix = script.file_path.suffix.lower()
+                    
+                    if suffix == '.py':
+                        prefix = "[PY]"
+                    elif suffix == '.ps1':
+                        prefix = "[PS]"
+                    elif suffix in ['.bat', '.cmd']:
+                        prefix = "[BAT]"
+                    elif suffix == '.sh':
+                        prefix = "[SH]"
+                    else:
+                        # Fallback for unknown types
+                        prefix = f"[{suffix.lstrip('.').upper()}]"
+                    
+                    # Update display name with prefix
+                    old_name = script.display_name
+                    script.display_name = f"{prefix} {old_name}"
+                    logger.debug(f"Resolved collision: '{old_name}' -> '{script.display_name}'")
 
     def _resolve_script_identifier(self, name: Optional[str]) -> Optional[str]:
         """Resolve a provided script name (identifier or legacy) to the canonical identifier."""

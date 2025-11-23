@@ -191,19 +191,20 @@ def run_with_timeout(func: Callable, timeout: float, *args, **kwargs) -> Any:
             raise TimeoutException(f"Function {func.__name__} timed out after {timeout}s")
 
 
-def create_test_script(script_dir: Path, name: str, content: str) -> Path:
+def create_test_script(script_dir: Path, name: str, content: str, suffix: str = ".py") -> Path:
     """
     Create a test script file.
 
     Args:
         script_dir: Directory to create script in
-        name: Script filename (without .py extension)
+        name: Script filename (without extension)
         content: Script content
+        suffix: File extension (default: .py)
 
     Returns:
         Path to created script
     """
-    script_path = script_dir / f"{name}.py"
+    script_path = script_dir / f"{name}{suffix}"
     script_path.write_text(content, encoding='utf-8')
     return script_path
 

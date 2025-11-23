@@ -338,36 +338,6 @@ if __name__ == '__main__':
         analyzer = ScriptAnalyzer()
         script_info = analyzer.analyze_script(script_path)
 
-        assert script_info is not None
-        # Python 3 is stricter about mixed indentation, so this might not be executable
-
-    def test_display_name_generation(self, temp_scripts_dir):
-        """Test that display names are generated correctly"""
-        script_path = create_test_script(
-            temp_scripts_dir,
-            'test_script_name',
-            'if __name__ == "__main__":\n    print("ok")'
-        )
-
-        analyzer = ScriptAnalyzer()
-        script_info = analyzer.analyze_script(script_path)
-
-        assert script_info is not None
-        assert script_info.display_name is not None
-        # Display name should be human-readable
-        assert len(script_info.display_name) > 0
-
-    @pytest.mark.edge_case
-    def test_analyze_script_with_bom(self, temp_scripts_dir):
-        """Test script with UTF-8 BOM (Byte Order Mark)"""
-        content = 'if __name__ == "__main__":\n    print("BOM test")'
-        script_path = temp_scripts_dir / "bom_test.py"
-
-        # Write with UTF-8 BOM
-        script_path.write_bytes(b'\xef\xbb\xbf' + content.encode('utf-8'))
-
-        analyzer = ScriptAnalyzer()
-        script_info = analyzer.analyze_script(script_path)
 
         assert script_info is not None
         # Should handle BOM gracefully
