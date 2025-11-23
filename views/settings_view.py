@@ -1292,6 +1292,35 @@ class SettingsView(QDialog):
                     self.tab_widget.setCurrentIndex(i)
                     break
 
+    def _extract_error_message(self, error_text: str) -> str:
+        """Extract user-friendly error message from technical error string.
+
+        Args:
+            error_text: Full error message from Windows API
+
+        Returns:
+            Simplified, user-friendly error message
+        """
+        if not error_text:
+            return "Unknown error"
+
+        # Common patterns to extract
+        # Pattern: "Validation failed: (1409, 'RegisterHotKey', 'Hot key is already registered.')"
+        if "already registered" in error_text.lower():
+            return "Already registered"
+        elif "invalid" in error_text.lower():
+            return "Invalid hotkey"
+        elif "permission" in error_text.lower() or "access" in error_text.lower():
+            return "Permission denied"
+        else:
+            # Try to extract just the meaningful part after the last quote
+            import re
+            match = re.search(r"'([^']+)'\s*\)?\s*$", error_text)
+            if match:
+                return match.group(1).rstrip('.')
+            # Fallback: return original if we can't parse it
+            return error_text
+
     def show_hotkey_validation_results(self, validation_results: Dict[str, dict]):
         """
         Display hotkey validation results to the user.
@@ -1314,10 +1343,9 @@ class SettingsView(QDialog):
             )
             return
 
-        # Build result message
-        lines = []
-        failed_count = 0
-        success_count = 0
+        # Separate successful and failed registrations
+        successful = []
+        failed = []
 
         for script_name in sorted(validation_results.keys()):
             info = validation_results[script_name]
@@ -1326,31 +1354,45 @@ class SettingsView(QDialog):
             error = info.get('error')
 
             if registered:
-                lines.append(f"✓ {script_name}: {hotkey}")
-                success_count += 1
+                successful.append((script_name, hotkey))
             else:
-                failed_count += 1
-                if error:
-                    lines.append(f"✗ {script_name}: {hotkey}")
-                    lines.append(f"  Error: {error}")
-                else:
-                    lines.append(f"✗ {script_name}: {hotkey} (unknown error)")
+                friendly_error = self._extract_error_message(error)
+                failed.append((script_name, hotkey, friendly_error))
 
-        # Create message
-        summary = f"Validation Results: {success_count} OK, {failed_count} Failed\n\n"
-        message = summary + "\n".join(lines)
+        # Build message with clear sections
+        message_parts = []
 
-        if failed_count > 0:
-            message += "\n\n" + (
-                "Tip: If hotkeys failed to register, another application may have already "
-                "registered them. Try:\n"
-                "1. Close other applications that use global hotkeys\n"
-                "2. Restart BindKit\n"
-                "3. Use different key combinations (try Win+Alt combinations)"
-            )
+        # Summary header
+        summary = f"Validation Results: {len(successful)} OK, {len(failed)} Failed"
+        message_parts.append(summary)
+        message_parts.append("")  # Blank line
+
+        # Successful hotkeys section
+        if successful:
+            message_parts.append("REGISTERED:")
+            for script_name, hotkey in successful:
+                message_parts.append(f"  ✓ {script_name}: {hotkey}")
+            message_parts.append("")  # Blank line
+
+        # Failed hotkeys section
+        if failed:
+            message_parts.append("FAILED:")
+            for script_name, hotkey, error in failed:
+                message_parts.append(f"  ✗ {script_name}: {hotkey}")
+                message_parts.append(f"     {error}")
+            message_parts.append("")  # Blank line
+
+        # Tips section (only if there are failures)
+        if failed:
+            message_parts.append("TROUBLESHOOTING:")
+            message_parts.append("  • Close other apps that use global hotkeys")
+            message_parts.append("  • Restart BindKit")
+            message_parts.append("  • Try different key combinations (Win+Alt works well)")
+
+        message = "\n".join(message_parts)
 
         # Show results
-        if failed_count > 0:
+        if failed:
             QMessageBox.warning(self, "Hotkey Validation Results", message)
         else:
             QMessageBox.information(self, "Hotkey Validation Results", message)
