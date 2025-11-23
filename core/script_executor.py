@@ -298,16 +298,24 @@ class ScriptExecutor:
         finally:
             # Final cleanup to ensure no process handles are left open
             if process:
+                # Close each pipe individually to ensure all are closed even if one fails
                 try:
-                    # Ensure pipes are closed
-                    if process.stdout:
+                    if hasattr(process, 'stdout') and process.stdout:
                         process.stdout.close()
-                    if process.stderr:
+                except Exception as e:
+                    logger.debug(f"Error closing stdout: {e}")
+
+                try:
+                    if hasattr(process, 'stderr') and process.stderr:
                         process.stderr.close()
-                    if process.stdin:
+                except Exception as e:
+                    logger.debug(f"Error closing stderr: {e}")
+
+                try:
+                    if hasattr(process, 'stdin') and process.stdin:
                         process.stdin.close()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Error closing stdin: {e}")
     
     def _execute_function_call(self, script_info: ScriptInfo, arguments: Dict[str, Any]) -> ExecutionResult:
         """Execute script by importing and calling main function."""

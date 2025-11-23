@@ -245,7 +245,10 @@ class ScheduleRuntime(QObject):
                 timer.timeout.disconnect()
             except (TypeError, RuntimeError):
                 pass  # Signal was not connected
-            del self._active_schedules[script_name]
+            # Ensure Qt properly destroys the timer to prevent resource leak
+            timer.deleteLater()
+            with self._schedule_lock:
+                del self._active_schedules[script_name]
             raise
 
         return handle
@@ -266,9 +269,10 @@ class ScheduleRuntime(QObject):
 
         handle = self._active_schedules[script_name]
 
-        # Set stopping flag to prevent race condition with execution
-        handle.is_stopping = True
-        handle.state = ScheduleState.STOPPED
+        # Set stopping flag to prevent race condition with execution (protected by lock)
+        with self._schedule_lock:
+            handle.is_stopping = True
+            handle.state = ScheduleState.STOPPED
 
         logger.info(f"Stopping schedule for '{script_name}'")
 
@@ -431,20 +435,23 @@ class ScheduleRuntime(QObject):
 
         handle = self._active_schedules[script_name]
 
-        # Check if schedule is being stopped (race condition prevention)
-        if handle.is_stopping:
-            logger.debug(f"Skipping execution of '{script_name}' (schedule is stopping)")
-            return
+        # Atomically check stopping/executing flags and set executing flag (race condition prevention)
+        with self._schedule_lock:
+            # Check if schedule is being stopped
+            if handle.is_stopping:
+                logger.debug(f"Skipping execution of '{script_name}' (schedule is stopping)")
+                return
 
-        # Check for overlap: if already executing, skip this run
-        if handle.is_executing:
-            logger.debug(f"Skipping execution of '{script_name}' (previous execution still running)")
-            self.schedule_execution_blocked.emit(script_name)
-            return
+            # Check for overlap: if already executing, skip this run
+            if handle.is_executing:
+                logger.debug(f"Skipping execution of '{script_name}' (previous execution still running)")
+                self.schedule_execution_blocked.emit(script_name)
+                return
 
-        # Mark as executing
-        handle.is_executing = True
-        handle.state = ScheduleState.RUNNING
+            # Mark as executing (while holding lock for atomicity)
+            handle.is_executing = True
+            handle.state = ScheduleState.RUNNING
+
         current_time = time.time()
 
         logger.info(f"Executing scheduled task: '{script_name}'")

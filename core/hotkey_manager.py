@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, Optional, Tuple, Set
+from threading import Lock
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QApplication, QWidget
 import win32con
@@ -151,7 +152,9 @@ class HotkeyManager(QObject):
         self.hotkeys: Dict[int, Tuple[str, str]] = {}  # ID -> (script_name, hotkey_string)
         self.registered_combos: Set[str] = set()  # Track registered combinations
         self.next_id = 1
-        
+        # Lock for thread-safe registration/unregistration operations
+        self._registration_lock = Lock()
+
         logger.info("HotkeyManager initialized")
 
     @staticmethod
@@ -382,122 +385,128 @@ class HotkeyManager(QObject):
     def register_hotkey(self, script_name: str, hotkey_string: str) -> bool:
         """
         Register a global hotkey for a script
-        
+
         Returns: True if successful, False otherwise
         """
         if not self.widget:
             logger.error("Hotkey system not started")
             return False
-        
+
         # Normalize the hotkey string
         normalized = self.normalize_hotkey_string(hotkey_string)
-        
-        # Check if available
-        if not self.is_hotkey_available(normalized):
-            error_msg = f"Hotkey {normalized} is already registered or reserved"
-            logger.warning(error_msg)
-            self.registration_failed.emit(script_name, normalized, error_msg)
-            return False
-        
-        # Parse the hotkey string
-        modifiers, vk_code = self.parse_hotkey_string(hotkey_string)
-        if modifiers == 0 and vk_code == 0:
-            error_msg = f"Invalid hotkey format: {hotkey_string}"
-            logger.error(error_msg)
-            self.registration_failed.emit(script_name, hotkey_string, error_msg)
-            return False
-        
-        # Validate widget and window handle are still valid
-        if not self._validate_widget_handle():
-            error_msg = "Hotkey system not started or widget handle invalid"
-            logger.error(error_msg)
-            self.registration_failed.emit(script_name, normalized, error_msg)
-            return False
-            
-        hotkey_id = self.next_id
-        self.next_id += 1
-        
-        # Attempt to register with Windows using the widget's HWND
-        try:
-            result = win32gui.RegisterHotKey(
-                self.widget.hwnd, hotkey_id, modifiers, vk_code
-            )
 
-            if not self._winapi_call_succeeded(result):
-                # Registration failed - retrieve error code for diagnostics
-                import win32api
-                error_code = win32api.GetLastError()
-                if error_code == 1409:  # ERROR_HOTKEY_ALREADY_REGISTERED
-                    error_msg = f"Hotkey {normalized} is already registered by another application"
-                else:
-                    error_msg = f"Failed to register hotkey {normalized}: Windows error {error_code}"
+        # Protect the entire validation + registration sequence with lock to prevent race conditions
+        with self._registration_lock:
+            # Check if available
+            if not self.is_hotkey_available(normalized):
+                error_msg = f"Hotkey {normalized} is already registered or reserved"
+                logger.warning(error_msg)
+                self.registration_failed.emit(script_name, normalized, error_msg)
+                return False
+
+            # Parse the hotkey string
+            modifiers, vk_code = self.parse_hotkey_string(hotkey_string)
+            if modifiers == 0 and vk_code == 0:
+                error_msg = f"Invalid hotkey format: {hotkey_string}"
+                logger.error(error_msg)
+                self.registration_failed.emit(script_name, hotkey_string, error_msg)
+                return False
+
+            # Validate widget and window handle are still valid
+            if not self._validate_widget_handle():
+                error_msg = "Hotkey system not started or widget handle invalid"
                 logger.error(error_msg)
                 self.registration_failed.emit(script_name, normalized, error_msg)
                 return False
 
-            # Registration successful - record the friendly result for debugging clarity
-            result_description = self._describe_winapi_result('RegisterHotKey', result)
-            logger.debug(
-                f"RegisterHotKey succeeded for hotkey {normalized} ({result_description})"
-            )
-            self.hotkeys[hotkey_id] = (script_name, normalized)
-            self.registered_combos.add(normalized)
-            logger.info(f"Registered hotkey {normalized} for script {script_name} (ID: {hotkey_id})")
-            return True
-                
-        except Exception as e:
-            error_msg = f"Exception registering hotkey {normalized}: {str(e)}"
-            logger.error(error_msg)
-            self.registration_failed.emit(script_name, normalized, error_msg)
-            return False
+            hotkey_id = self.next_id
+            self.next_id += 1
+
+            # Attempt to register with Windows using the widget's HWND
+            try:
+                result = win32gui.RegisterHotKey(
+                    self.widget.hwnd, hotkey_id, modifiers, vk_code
+                )
+
+                if not self._winapi_call_succeeded(result):
+                    # Registration failed - retrieve error code for diagnostics
+                    import win32api
+                    error_code = win32api.GetLastError()
+                    if error_code == 1409:  # ERROR_HOTKEY_ALREADY_REGISTERED
+                        error_msg = f"Hotkey {normalized} is already registered by another application"
+                    else:
+                        error_msg = f"Failed to register hotkey {normalized}: Windows error {error_code}"
+                    logger.error(error_msg)
+                    self.registration_failed.emit(script_name, normalized, error_msg)
+                    return False
+
+                # Registration successful - record the friendly result for debugging clarity
+                result_description = self._describe_winapi_result('RegisterHotKey', result)
+                logger.debug(
+                    f"RegisterHotKey succeeded for hotkey {normalized} ({result_description})"
+                )
+                self.hotkeys[hotkey_id] = (script_name, normalized)
+                self.registered_combos.add(normalized)
+                logger.info(f"Registered hotkey {normalized} for script {script_name} (ID: {hotkey_id})")
+                return True
+
+            except Exception as e:
+                error_msg = f"Exception registering hotkey {normalized}: {str(e)}"
+                logger.error(error_msg)
+                self.registration_failed.emit(script_name, normalized, error_msg)
+                return False
     
     def unregister_hotkey(self, script_name: str) -> bool:
         """Unregister a hotkey for a script"""
         if not self.widget:
             return False
-        
-        # Find the hotkey ID for this script
-        hotkey_id = None
-        hotkey_string = None
-        
-        for hid, (sname, hstring) in self.hotkeys.items():
-            if sname == script_name:
-                hotkey_id = hid
-                hotkey_string = hstring
-                break
-        
-        if hotkey_id is None:
-            logger.warning(f"No hotkey registered for script {script_name}")
-            return False
-        
-        # Unregister with Windows
-        try:
-            win32gui.UnregisterHotKey(self.widget.hwnd, hotkey_id)
-            
-            # If we get here, unregistration was successful
-            del self.hotkeys[hotkey_id]
-            self.registered_combos.discard(hotkey_string)
-            logger.info(f"Unregistered hotkey for script {script_name}")
-            return True
-                
-        except Exception as e:
-            logger.error(f"Exception unregistering hotkey for {script_name}: {e}")
-            return False
+
+        # Protect unregistration with lock to prevent concurrent register/unregister
+        with self._registration_lock:
+            # Find the hotkey ID for this script
+            hotkey_id = None
+            hotkey_string = None
+
+            for hid, (sname, hstring) in self.hotkeys.items():
+                if sname == script_name:
+                    hotkey_id = hid
+                    hotkey_string = hstring
+                    break
+
+            if hotkey_id is None:
+                logger.warning(f"No hotkey registered for script {script_name}")
+                return False
+
+            # Unregister with Windows
+            try:
+                win32gui.UnregisterHotKey(self.widget.hwnd, hotkey_id)
+
+                # If we get here, unregistration was successful
+                del self.hotkeys[hotkey_id]
+                self.registered_combos.discard(hotkey_string)
+                logger.info(f"Unregistered hotkey for script {script_name}")
+                return True
+
+            except Exception as e:
+                logger.error(f"Exception unregistering hotkey for {script_name}: {e}")
+                return False
     
     def unregister_all(self):
         """Unregister all hotkeys"""
         if not self.widget:
             return
-        
-        for hotkey_id in list(self.hotkeys.keys()):
-            try:
-                win32gui.UnregisterHotKey(self.widget.hwnd, hotkey_id)
-            except Exception as e:
-                logger.error(f"Error unregistering hotkey {hotkey_id}: {e}")
-        
-        self.hotkeys.clear()
-        self.registered_combos.clear()
-        logger.info("All hotkeys unregistered")
+
+        # Protect bulk unregistration with lock
+        with self._registration_lock:
+            for hotkey_id in list(self.hotkeys.keys()):
+                try:
+                    win32gui.UnregisterHotKey(self.widget.hwnd, hotkey_id)
+                except Exception as e:
+                    logger.error(f"Error unregistering hotkey {hotkey_id}: {e}")
+
+            self.hotkeys.clear()
+            self.registered_combos.clear()
+            logger.info("All hotkeys unregistered")
     
     def get_registered_hotkeys(self) -> Dict[str, str]:
         """
