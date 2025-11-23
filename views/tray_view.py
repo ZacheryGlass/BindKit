@@ -13,6 +13,8 @@ from PyQt6.QtWidgets import (QSystemTrayIcon, QMenu, QWidget)
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer, Qt, QEvent
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QBrush, QPen, QCursor, QAction, QKeyEvent, QColor
 
+from views.script_launcher_view import ScriptLauncherWidget
+
 logger = logging.getLogger('Views.Tray')
 
 
@@ -57,8 +59,6 @@ class TrayView(QObject):
         # Track menu objects for proper cleanup
         self._menu_actions = []  # List to track QAction objects for context menu
         self._submenus = []  # List to track QMenu objects for context menu
-        self._hotkey_menu_actions = []  # List to track QAction objects for hotkey menu
-        self._hotkey_submenus = []  # List to track QMenu objects for hotkey menu
         self._menu_update_count = 0  # Track updates for periodic cleanup
 
         # Create tray icon
@@ -71,18 +71,13 @@ class TrayView(QObject):
             Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
         )
 
-        # Create hotkey menu (for hotkey activation)
-        self.hotkey_menu = QMenu(parent)
-        self.hotkey_menu.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.hotkey_menu.setWindowFlags(
-            Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint
-        )
-        self._apply_hotkey_menu_transparency()
-
-        # Install event filter for ESC key handling on both menus
+        # Install event filter for ESC key handling
         self._key_event_filter = MenuKeyEventFilter()
         self.context_menu.installEventFilter(self._key_event_filter)
-        self.hotkey_menu.installEventFilter(self._key_event_filter)
+
+        # Create script launcher widget (replaces old hotkey menu)
+        self.script_launcher = ScriptLauncherWidget(parent)
+        self.script_launcher.script_execute_requested.connect(self.menu_action_triggered.emit)
 
         # Create and set icon
         self._create_tray_icon()
@@ -90,83 +85,15 @@ class TrayView(QObject):
         # Connect signals
         self.tray_icon.activated.connect(self._on_tray_activated)
         self.tray_icon.setContextMenu(self.context_menu)
-        
+
         logger.info("TrayView initialized")
 
-    def _apply_hotkey_menu_transparency(self):
-        """Apply semi-transparent background to hotkey menu using current theme colors"""
-        from PyQt6.QtWidgets import QApplication
-        import re
-
-        # Get current theme colors from global stylesheet
-        app = QApplication.instance()
-        if not app:
-            return
-
-        stylesheet = app.styleSheet()
-
-        # Parse QMenu background color from stylesheet
-        # Look for patterns like: QMenu { ... background-color: #171A21; ... }
-        menu_bg_color = None
-        menu_border_color = None
-
-        # Find QMenu section in stylesheet
-        menu_match = re.search(r'QMenu[^{]*\{([^}]+)\}', stylesheet, re.DOTALL)
-        if menu_match:
-            menu_section = menu_match.group(1)
-
-            # Extract background-color
-            bg_match = re.search(r'background-color:\s*([#\w]+)', menu_section)
-            if bg_match:
-                menu_bg_color = bg_match.group(1)
-
-            # Extract border color
-            border_match = re.search(r'border:\s*[^;]*\s+([#\w]+)', menu_section)
-            if border_match:
-                menu_border_color = border_match.group(1)
-
-        # Convert hex colors to RGBA with transparency
-        def hex_to_rgba(hex_color: str, alpha: float = 0.85) -> str:
-            """Convert hex color to rgba string with specified alpha"""
-            if not hex_color or not hex_color.startswith('#'):
-                return f"rgba(45, 45, 45, {alpha})"  # fallback
-
-            hex_color = hex_color.lstrip('#')
-            if len(hex_color) == 6:
-                r = int(hex_color[0:2], 16)
-                g = int(hex_color[2:4], 16)
-                b = int(hex_color[4:6], 16)
-                return f"rgba({r}, {g}, {b}, {alpha})"
-            return f"rgba(45, 45, 45, {alpha})"  # fallback
-
-        # Apply theme-aware transparent style
-        bg_rgba = hex_to_rgba(menu_bg_color, 0.85)
-        border_rgba = hex_to_rgba(menu_border_color, 0.3) if menu_border_color else "rgba(255, 255, 255, 0.2)"
-
-        self.hotkey_menu.setStyleSheet(f"""
-            QMenu {{
-                background-color: {bg_rgba};
-                border: 1px solid {border_rgba};
-                border-radius: 12px;
-                padding: 8px;
-            }}
-            QMenu::item {{
-                padding: 12px 20px;
-                border-radius: 8px;
-            }}
-            QMenu::separator {{
-                height: 1px;
-                background: rgba(255, 255, 255, 0.15);
-                margin: 8px 16px;
-            }}
-        """)
-
     def refresh_theme(self):
-        """Reapply theme-sensitive styling for tray menus."""
+        """Reapply theme-sensitive styling for launcher."""
         try:
-            self._apply_hotkey_menu_transparency()
+            self.script_launcher.refresh_theme()
         except Exception as exc:
-            logger.debug(f"Failed to refresh tray theme styling: {exc}")
+            logger.debug(f"Failed to refresh launcher theme styling: {exc}")
 
     def show_icon(self):
         """Show the tray icon"""
@@ -197,30 +124,15 @@ class TrayView(QObject):
         return self.tray_icon.supportsMessages()
 
     def show_menu_at_center(self):
-        """Show the hotkey menu at the center of the screen"""
-        from PyQt6.QtWidgets import QApplication
-        from PyQt6.QtCore import QPoint
+        """Show the script launcher at the center of the screen"""
+        # Show the launcher widget instead of the old menu
+        self.script_launcher.show_at_center()
+        logger.debug("Script launcher shown at center")
 
-        # Get the screen geometry
-        screen = QApplication.primaryScreen()
-        if screen:
-            screen_geometry = screen.geometry()
-
-            # Get menu size hint to calculate proper centering
-            menu_size = self.hotkey_menu.sizeHint()
-
-            # Calculate position so menu's center is at screen center
-            menu_x = screen_geometry.x() + (screen_geometry.width() - menu_size.width()) // 2
-            menu_y = screen_geometry.y() + (screen_geometry.height() - menu_size.height()) // 2
-            menu_point = QPoint(menu_x, menu_y)
-
-            # Show hotkey menu centered
-            self.hotkey_menu.popup(menu_point)
-            logger.debug(f"Hotkey menu centered on screen at: ({menu_x}, {menu_y})")
-        else:
-            # Fallback to cursor position if screen not available
-            self.hotkey_menu.popup(QCursor.pos())
-            logger.debug("Hotkey menu shown at cursor position (fallback)")
+    def update_launcher_scripts(self, scripts: List[Dict[str, Any]], show_hotkeys: bool = True):
+        """Update the script launcher with current script data"""
+        self.script_launcher.update_scripts(scripts, show_hotkeys)
+        logger.debug(f"Launcher updated with {len(scripts)} scripts, show_hotkeys={show_hotkeys}")
 
     def update_menu_structure(self, menu_structure: Dict[str, Any]):
         """Update the menu structure based on provided data"""
@@ -233,22 +145,18 @@ class TrayView(QObject):
             # Force immediate cleanup to prevent accumulation
             self._force_immediate_cleanup()
 
-            # Clear both menus
+            # Clear context menu
             self.context_menu.clear()
-            self.hotkey_menu.clear()
 
-            # Reset tracking lists for both menus
+            # Reset tracking lists for context menu
             self._menu_actions = []
             self._submenus = []
-            self._hotkey_menu_actions = []
-            self._hotkey_submenus = []
 
-            # Build both menus with the same structure
+            # Build context menu with the structure
             self._build_menu(self.context_menu, self._menu_actions, self._submenus, menu_structure)
-            self._build_menu(self.hotkey_menu, self._hotkey_menu_actions, self._hotkey_submenus, menu_structure)
 
             menu_items = menu_structure.get('items', [])
-            logger.debug(f"Both menus updated with {len(menu_items)} items")
+            logger.debug(f"Context menu updated with {len(menu_items)} items")
 
             # Perform aggressive cleanup periodically for better memory management
             self._menu_update_count += 1
@@ -413,34 +321,11 @@ class TrayView(QObject):
                 submenu.clear()
                 submenu.deleteLater()
 
-            # Clean up hotkey menu actions
-            for action in self._hotkey_menu_actions:
-                if action is None:
-                    continue
-
-                try:
-                    _ = action.text()
-                    try:
-                        action.triggered.disconnect()
-                    except (TypeError, RuntimeError):
-                        pass
-                    action.deleteLater()
-                except RuntimeError:
-                    logger.debug(f"Hotkey menu action already deleted, skipping cleanup")
-                    pass
-
-            # Clean up hotkey menu submenus
-            for submenu in self._hotkey_submenus:
-                submenu.clear()
-                submenu.deleteLater()
-
             # Clear all tracking lists
             self._menu_actions.clear()
             self._submenus.clear()
-            self._hotkey_menu_actions.clear()
-            self._hotkey_submenus.clear()
 
-            logger.debug("Both menu objects cleaned up")
+            logger.debug("Menu objects cleaned up")
 
         except Exception as e:
             logger.error(f"Error during menu cleanup: {e}")
@@ -491,20 +376,28 @@ class TrayView(QObject):
         # Clean up menu objects
         self._cleanup_menu_objects()
 
-        # Clear both menus
+        # Clear context menu
         self.context_menu.clear()
-        self.hotkey_menu.clear()
-        
+
+        # Clean up script launcher
+        if self.script_launcher:
+            try:
+                self.script_launcher.script_execute_requested.disconnect()
+            except (TypeError, RuntimeError):
+                pass
+            self.script_launcher.close()
+            self.script_launcher.deleteLater()
+
         # Disconnect tray icon signals
         try:
             self.tray_icon.activated.disconnect()
         except Exception:
             pass
-        
+
         # Hide tray icon
         self.tray_icon.hide()
-        
+
         # Force final cleanup
         self._perform_aggressive_cleanup()
-        
+
         logger.info("TrayView cleaned up")

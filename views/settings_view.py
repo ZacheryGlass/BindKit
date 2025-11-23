@@ -76,7 +76,8 @@ class SettingsView(QDialog):
     follow_system_theme_changed = pyqtSignal(bool)
     font_size_changed = pyqtSignal(int)
     padding_scale_changed = pyqtSignal(float)
-    
+    launcher_show_hotkeys_changed = pyqtSignal(bool)
+
     # Dialog actions (instant-apply mode: no OK/Cancel buttons)
     
     def __init__(self, parent=None):
@@ -108,6 +109,7 @@ class SettingsView(QDialog):
         self.theme_combo = None
         self.follow_system_checkbox = None
         self.font_size_slider = None
+        self.launcher_show_hotkeys_checkbox = None
         self.font_size_value_label = None
         self.layout_density_slider = None
         self.layout_density_value_label = None
@@ -311,6 +313,14 @@ class SettingsView(QDialog):
         self.layout_density_slider.setValue(default_density_slider)
         self._update_density_display(1.0)
         theme_layout.addLayout(density_row)
+
+        # Launcher appearance
+        self.launcher_show_hotkeys_checkbox = QCheckBox("Show hotkeys in script launcher")
+        self.launcher_show_hotkeys_checkbox.setToolTip(
+            "Display keyboard shortcuts next to script names in the launcher popup"
+        )
+        self.launcher_show_hotkeys_checkbox.toggled.connect(self.launcher_show_hotkeys_changed.emit)
+        theme_layout.addWidget(self.launcher_show_hotkeys_checkbox)
 
         theme_group.setLayout(theme_layout)
         layout.addWidget(theme_group)
@@ -624,6 +634,18 @@ class SettingsView(QDialog):
             self.layout_density_slider.setValue(slider_value)
             self.layout_density_slider.blockSignals(block)
             self._update_density_display(self._slider_value_to_scale(slider_value))
+        if self.launcher_show_hotkeys_checkbox:
+            show_hotkeys = settings.get('launcher_show_hotkeys', True)
+            block = self.launcher_show_hotkeys_checkbox.blockSignals(True)
+            self.launcher_show_hotkeys_checkbox.setChecked(show_hotkeys)
+            self.launcher_show_hotkeys_checkbox.blockSignals(block)
+
+    def update_launcher_show_hotkeys(self, show: bool):
+        """Update the launcher show hotkeys checkbox state."""
+        if self.launcher_show_hotkeys_checkbox:
+            block = self.launcher_show_hotkeys_checkbox.blockSignals(True)
+            self.launcher_show_hotkeys_checkbox.setChecked(show)
+            self.launcher_show_hotkeys_checkbox.blockSignals(block)
 
     def _on_font_size_slider_moved(self, value: int):
         """Update font size display during slider drag without applying theme."""

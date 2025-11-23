@@ -34,6 +34,7 @@ class SettingsController(QObject):
     script_list_updated = pyqtSignal(list)  # List of script configurations
     hotkey_updated = pyqtSignal(str, str)  # script_name, hotkey
     show_menu_hotkey_updated = pyqtSignal(str)  # hotkey string
+    launcher_show_hotkeys_updated = pyqtSignal(bool)  # show hotkeys in launcher
     preset_updated = pyqtSignal(str, dict)  # script_name, presets
     settings_saved = pyqtSignal()
     settings_reset = pyqtSignal(str)  # category that was reset
@@ -337,6 +338,23 @@ class SettingsController(QObject):
         except Exception as e:
             logger.error(f"Error setting show menu hotkey: {e}")
             self.error_occurred.emit("Hotkey Error", f"Failed to set show menu hotkey: {str(e)}")
+
+    def get_launcher_show_hotkeys(self) -> bool:
+        """Get whether to show hotkeys in the script launcher"""
+        return self._settings_manager.get_launcher_show_hotkeys()
+
+    def set_launcher_show_hotkeys(self, show: bool):
+        """Set whether to show hotkeys in the script launcher"""
+        logger.info(f"Setting launcher show hotkeys: {show}")
+
+        try:
+            self._settings_manager.set_launcher_show_hotkeys(show)
+            self.launcher_show_hotkeys_updated.emit(show)
+            logger.info(f"Launcher show hotkeys updated to: {show}")
+
+        except Exception as e:
+            logger.error(f"Error setting launcher show hotkeys: {e}")
+            self.error_occurred.emit("Settings Error", f"Failed to update launcher setting: {str(e)}")
 
     def validate_all_hotkeys(self):
         """

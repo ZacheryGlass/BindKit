@@ -386,7 +386,10 @@ class MVCApplication:
         self.tray_controller.notification_display_requested.connect(
             self.tray_view.show_notification
         )
-        
+        self.tray_controller.launcher_update_requested.connect(
+            self._update_launcher
+        )
+
         # Tray View -> Tray Controller connections
         self.tray_view.menu_action_triggered.connect(
             self.tray_controller.handle_menu_action
@@ -568,10 +571,29 @@ class MVCApplication:
         """Initialize view states based on model data"""
         # Show tray icon
         self.tray_view.show_icon()
-        
+
         # Update tray menu with current scripts
         self.tray_controller.update_menu()
-    
+
+        # Update launcher with current scripts
+        self._update_launcher()
+
+    def _update_launcher(self, *args):
+        """Update the script launcher with current script data and settings"""
+        try:
+            # Get script data from controller
+            launcher_scripts = self.tray_controller.build_launcher_scripts()
+
+            # Get launcher display settings
+            show_hotkeys = self._settings_controller.get_launcher_show_hotkeys()
+
+            # Update the launcher view
+            self.tray_view.update_launcher_scripts(launcher_scripts, show_hotkeys)
+
+            self.logger.debug(f"Launcher updated with {len(launcher_scripts)} scripts, show_hotkeys={show_hotkeys}")
+        except Exception as e:
+            self.logger.error(f"Error updating launcher: {e}")
+
     def _handle_setting_changed(self, key, value):
         """React to settings updates that affect the tray view."""
         if not key or not self.tray_view:
@@ -693,6 +715,7 @@ class MVCApplication:
         self._settings_view.follow_system_theme_changed.connect(self._settings_controller.set_follow_system_theme)
         self._settings_view.font_size_changed.connect(self._settings_controller.set_font_size)
         self._settings_view.padding_scale_changed.connect(self._settings_controller.set_padding_scale)
+        self._settings_view.launcher_show_hotkeys_changed.connect(self._settings_controller.set_launcher_show_hotkeys)
         # Instant-apply: no accept/save button; models persist on change
         
         # Controller -> View connections
@@ -712,20 +735,24 @@ class MVCApplication:
         self._settings_controller.show_menu_hotkey_updated.connect(self._settings_view.update_show_menu_hotkey)
         # Refresh hotkey registrations when show menu hotkey changes
         self._settings_controller.show_menu_hotkey_updated.connect(lambda h: self._refresh_hotkey_registrations())
+        self._settings_controller.launcher_show_hotkeys_updated.connect(self._settings_view.update_launcher_show_hotkeys)
+        self._settings_controller.launcher_show_hotkeys_updated.connect(self._update_launcher)
         self._settings_controller.preset_updated.connect(self._settings_view.update_preset_list)
         self._settings_controller.appearance_settings_updated.connect(self._settings_view.update_appearance_settings)
-        # When presets change, refresh tray menu so preset submenus reflect changes
+        # When presets change, refresh tray menu and launcher so preset submenus reflect changes
         try:
             self._settings_controller.preset_updated.connect(lambda *_: self.tray_controller.update_menu())
+            self._settings_controller.preset_updated.connect(lambda *_: self._update_launcher())
         except (TypeError, RuntimeError, AttributeError) as e:
             self.logger.warning(f"Could not connect preset_updated signal to tray menu update: {e}")
         # Removed unnecessary confirmation popups for settings_saved and settings_reset
         # Only keep error messages which are important
         self._settings_controller.error_occurred.connect(self._settings_view.show_error)
 
-        # Also refresh the tray menu when script list metadata changes (e.g., custom names)
+        # Also refresh the tray menu and launcher when script list metadata changes (e.g., custom names)
         try:
             self._settings_controller.script_list_updated.connect(lambda *_: self.tray_controller.update_menu())
+            self._settings_controller.script_list_updated.connect(lambda *_: self._update_launcher())
         except (TypeError, RuntimeError, AttributeError) as e:
             self.logger.warning(f"Could not connect script_list_updated signal to tray menu update: {e}")
 

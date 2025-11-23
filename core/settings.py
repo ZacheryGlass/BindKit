@@ -969,3 +969,13 @@ class SettingsManager(QObject):
         """Set the hotkey for showing the tray menu."""
         self.set('system_hotkeys/show_menu', hotkey)
         logger.info(f"Show menu hotkey set to: {hotkey}")
+
+    # Script launcher appearance methods
+    def get_launcher_show_hotkeys(self) -> bool:
+        """Get whether to show hotkeys in the script launcher."""
+        return self.get('launcher/show_hotkeys', True)
+
+    def set_launcher_show_hotkeys(self, show: bool) -> None:
+        """Set whether to show hotkeys in the script launcher."""
+        self.set('launcher/show_hotkeys', show)
+        logger.info(f"Launcher show hotkeys set to: {show}")
