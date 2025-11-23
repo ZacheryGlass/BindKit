@@ -349,6 +349,7 @@ class SettingsView(QDialog):
         
         # Configure table
         self.script_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.script_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # Prevent focus rectangle on cells
         self.script_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.script_table.setAlternatingRowColors(True)
         self.script_table.verticalHeader().setVisible(False)  # Hide row numbers
@@ -900,7 +901,8 @@ class SettingsView(QDialog):
         for row, script in enumerate(self._script_data):
             self._apply_row_disabled_style(row, script.get('is_disabled', False))
 
-        # Selection disabled, no need to clear
+        # Clear current cell to prevent focus rectangle on any cell
+        self.script_table.setCurrentCell(-1, -1)
 
     def _apply_row_disabled_style(self, row: int, disabled: bool):
         """Gray out and disable interactive widgets for disabled scripts (built-in only)."""
