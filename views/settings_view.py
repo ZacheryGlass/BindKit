@@ -592,8 +592,11 @@ class SettingsView(QDialog):
 
     def _on_follow_system_toggled(self, checked: bool):
         """Enable/disable theme combo based on follow system setting."""
+        logger.info(f"_on_follow_system_toggled called with checked={checked}")
         if self.theme_combo:
-            self.theme_combo.setEnabled(not checked)
+            enabled_state = not checked
+            logger.info(f"Setting theme combo enabled state to: {enabled_state}")
+            self.theme_combo.setEnabled(enabled_state)
             if checked:
                 self.theme_combo.setToolTip("Theme is managed by system settings")
             else:
@@ -616,8 +619,10 @@ class SettingsView(QDialog):
         if self.follow_system_checkbox:
             block = self.follow_system_checkbox.blockSignals(True)
             is_following = bool(settings.get('follow_system', False))
+            logger.info(f"Follow system setting: {is_following} (raw value: {settings.get('follow_system')})")
             self.follow_system_checkbox.setChecked(is_following)
             self.follow_system_checkbox.blockSignals(block)
+            logger.debug(f"Calling _on_follow_system_toggled({is_following}) - will {'disable' if is_following else 'enable'} theme combo")
             self._on_follow_system_toggled(is_following)
         if self.font_size_slider:
             font_value = settings.get('font_size', 11)
