@@ -254,6 +254,7 @@ class SettingsView(QDialog):
         row.addWidget(QLabel("Color theme:"))
         self.theme_combo = QComboBox()
         self.theme_combo.addItems(["Onyx", "Quartz", "Slate", "Jade", "Sapphire"])  # keep in sync with resources/themes
+        self.theme_combo.setMinimumWidth(120)  # Ensure full theme names are visible
         self.theme_combo.currentTextChanged.connect(self.theme_changed.emit)
         row.addWidget(self.theme_combo)
         row.addStretch()
