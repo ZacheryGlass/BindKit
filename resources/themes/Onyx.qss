@@ -95,7 +95,7 @@ QToolTip {
 
 /* Links / accents */
 QLabel a { color: #4CC2FF; }
-QPushButton[flat="true"] { color: #4CC2FF; border: none; background: transparent; }
+QPushButton[flat="true"] { color: #4CC2FF; border: none; background: transparent; padding: 0 12px; }
 
 /* Appearance sliders */
 QSlider[appearanceSlider="true"] {

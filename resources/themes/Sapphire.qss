@@ -64,7 +64,7 @@ QHeaderView::section { background: #121733; color: #E6ECFF; border: 1px solid #2
 QToolTip { background-color: #121733; color: #E6ECFF; border: 1px solid #243060; }
 
 QLabel a { color: #4C8DFF; }
-QPushButton[flat="true"] { color: #4C8DFF; border: none; background: transparent; }
+QPushButton[flat="true"] { color: #4C8DFF; border: none; background: transparent; padding: 0 12px; }
 
 /* Appearance sliders */
 QSlider[appearanceSlider="true"] {
