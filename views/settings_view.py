@@ -242,7 +242,7 @@ class SettingsView(QDialog):
         tab = QWidget()
         layout = QVBoxLayout(tab)
 
-        theme_group = QGroupBox("Theme & Layout")
+        theme_group = QGroupBox()
         theme_layout = QVBoxLayout()
 
         # Follow system option
@@ -334,7 +334,7 @@ class SettingsView(QDialog):
         ])
         
         # Configure table
-        self.script_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.script_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.script_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.script_table.setAlternatingRowColors(True)
         self.script_table.verticalHeader().setVisible(False)  # Hide row numbers
@@ -370,6 +370,8 @@ class SettingsView(QDialog):
             pass
         
         layout.addWidget(self.script_table)
+        
+        # Connect selection change to style update - REMOVED (Selection disabled)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -422,7 +424,7 @@ class SettingsView(QDialog):
         ])
 
         # Configure table for consistent look
-        self.preset_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.preset_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.preset_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.preset_table.setAlternatingRowColors(True)
         self.preset_table.verticalHeader().setVisible(False)
@@ -455,6 +457,8 @@ class SettingsView(QDialog):
         self.preset_table.cellDoubleClicked.connect(lambda r, c: self._on_edit_preset())
 
         layout.addWidget(self.preset_table)
+        
+        # Connect selection change to style update - REMOVED (Selection disabled)
         
         # Buttons
         button_layout = QHBoxLayout()
@@ -868,6 +872,8 @@ class SettingsView(QDialog):
         for row, script in enumerate(self._script_data):
             self._apply_row_disabled_style(row, script.get('is_disabled', False))
 
+        # Selection disabled, no need to clear
+
     def _apply_row_disabled_style(self, row: int, disabled: bool):
         """Gray out and disable interactive widgets for disabled scripts (built-in only)."""
         # Action button stays enabled (to allow re-enabling)
@@ -1009,6 +1015,8 @@ class SettingsView(QDialog):
                 self.preset_table.setRowHeight(r, p_desired)
         except Exception:
             pass
+        
+        # Selection disabled, no need to clear
     
     # UI event handlers
     
@@ -1282,3 +1290,5 @@ class SettingsView(QDialog):
         finally:
             # Always call parent closeEvent
             super().closeEvent(event)
+
+    # _update_selection_styles removed as selection is disabled
