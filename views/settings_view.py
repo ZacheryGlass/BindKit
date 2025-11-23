@@ -599,13 +599,18 @@ class SettingsView(QDialog):
 
     def update_appearance_settings(self, settings: Dict[str, Any]):
         """Update appearance settings display."""
+        logger.info(f"update_appearance_settings called, combo has {self.theme_combo.count() if self.theme_combo else 'None'} items")
         if self.theme_combo:
             theme = settings.get('theme', 'Slate')
+            logger.debug(f"Looking for theme '{theme}' in combo box with {self.theme_combo.count()} items")
             idx = self.theme_combo.findText(theme)
             if idx >= 0:
                 block = self.theme_combo.blockSignals(True)
                 self.theme_combo.setCurrentIndex(idx)
                 self.theme_combo.blockSignals(block)
+                logger.debug(f"Set theme combo to '{theme}' at index {idx}")
+            else:
+                logger.warning(f"Theme '{theme}' not found in combo box")
         if self.follow_system_checkbox:
             block = self.follow_system_checkbox.blockSignals(True)
             is_following = bool(settings.get('follow_system', False))
@@ -655,6 +660,7 @@ class SettingsView(QDialog):
         Args:
             themes: List of theme names (without .qss extension)
         """
+        logger.info(f"set_available_themes called with {len(themes) if themes else 0} themes: {themes}")
         if self.theme_combo:
             # Handle edge case: empty theme list (fallback to ensure usability)
             if not themes:
@@ -664,6 +670,7 @@ class SettingsView(QDialog):
 
             # Store current selection to restore it after repopulating
             current_theme = self.theme_combo.currentText()
+            logger.debug(f"Current theme before update: '{current_theme}'")
 
             # Block signals to prevent theme_changed from firing during population
             block = self.theme_combo.blockSignals(True)
@@ -671,14 +678,20 @@ class SettingsView(QDialog):
             # Clear and repopulate
             self.theme_combo.clear()
             self.theme_combo.addItems(themes)
+            logger.info(f"Combo box now has {self.theme_combo.count()} items after adding {len(themes)} themes")
 
             # Restore previous selection if it still exists
             if current_theme:
                 idx = self.theme_combo.findText(current_theme)
                 if idx >= 0:
                     self.theme_combo.setCurrentIndex(idx)
+                    logger.debug(f"Restored selection to '{current_theme}' at index {idx}")
+                else:
+                    logger.debug(f"Could not restore '{current_theme}', not found in new theme list")
 
             self.theme_combo.blockSignals(block)
+        else:
+            logger.warning("set_available_themes called but theme_combo is None")
 
     def _on_font_size_slider_moved(self, value: int):
         """Update font size display during slider drag without applying theme."""

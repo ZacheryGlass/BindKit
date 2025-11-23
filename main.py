@@ -666,6 +666,7 @@ class MVCApplication:
         # Populate available themes from theme manager
         try:
             available_themes = self._settings_controller._theme_manager.available_themes()
+            self.logger.info(f"Discovered {len(available_themes)} themes: {available_themes}")
             self._settings_view.set_available_themes(available_themes)
         except Exception as e:
             self.logger.warning(f"Failed to load themes: {e}")
