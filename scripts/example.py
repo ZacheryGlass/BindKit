@@ -5,8 +5,7 @@ from PyQt6.QtWidgets import QMessageBox, QApplication
 
 def main():
     # Get or create QApplication instance
-    # When run via FUNCTION_CALL (on main thread), the app already exists
-    # When run via SUBPROCESS or if needed, create a new one
+    # Scripts execute in separate processes, so create a new QApplication
     app = QApplication.instance()
     if app is None:
         app = QApplication(sys.argv)

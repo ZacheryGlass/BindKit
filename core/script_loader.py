@@ -334,20 +334,13 @@ class ScriptLoader:
         }
     
     def reload_scripts(self) -> List[ScriptInfo]:
+        """Reload all scripts from disk.
+
+        Clears the loaded scripts cache and rediscovers all scripts.
+        Since scripts execute as subprocesses, no module cache cleanup is needed.
+        """
         logger.info("Reloading all scripts")
         self.loaded_scripts.clear()
-        
-        # Clear executor's module cache thoroughly (removes from sys.modules too)
-        try:
-            removed = self.executor.clear_module_cache()
-            logger.debug(f"Executor module cache cleared: {removed} module(s) removed")
-        except Exception:
-            # Backward compatibility: fall back to simple clear
-            try:
-                self.executor.loaded_modules.clear()
-            except Exception:
-                pass
-        
         return self.discover_scripts()
     
     def get_script(self, name: str) -> Optional[ScriptInfo]:

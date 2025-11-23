@@ -1,7 +1,6 @@
 import ast
 import os
 import sys
-import importlib.util
 import subprocess
 import logging
 from pathlib import Path
@@ -39,8 +38,6 @@ class ScriptType(Enum):
 
 class ExecutionStrategy(Enum):
     SUBPROCESS = "subprocess"
-    FUNCTION_CALL = "function_call"
-    MODULE_EXEC = "module_exec"
     SERVICE = "service"
     POWERSHELL = "powershell"
     BATCH = "batch"
@@ -62,7 +59,6 @@ class ScriptInfo:
     execution_strategy: ExecutionStrategy
     script_type: ScriptType = ScriptType.PYTHON
     interpreter_path: Optional[str] = None
-    main_function: Optional[str] = None
     arguments: List[ArgumentInfo] = None
     has_main_block: bool = False
     is_executable: bool = False
@@ -123,24 +119,22 @@ class ScriptAnalyzer:
             tree = ast.parse(source_code)
             
             # Analyze the script structure
-            has_main_function = self._has_main_function(tree)
             has_main_block = self._has_main_block(source_code)
             arguments = self._extract_arguments(tree, source_code)
-            
-            # Determine execution strategy
-            execution_strategy = self._determine_execution_strategy(has_main_function, has_main_block, arguments)
 
-            # Check if script is configured as a service (overrides normal execution strategy)
+            # Determine execution strategy (always SUBPROCESS for Python unless it's a service)
             script_name = script_path.stem
             if self.settings and self.settings.is_script_service(script_name):
                 execution_strategy = ExecutionStrategy.SERVICE
                 logger.info(f"Script '{script_name}' is configured as a service")
+            else:
+                execution_strategy = ExecutionStrategy.SUBPROCESS
 
             # Determine if script needs configuration
             needs_configuration = self._determine_configuration_needs(arguments)
 
             # Determine if script is actually executable (has executable code)
-            is_executable = has_main_block or has_main_function
+            is_executable = has_main_block
             error_message = None
             if not is_executable:
                 # Check if script has any code beyond imports
@@ -157,7 +151,6 @@ class ScriptAnalyzer:
                 display_name=display_name,
                 execution_strategy=execution_strategy,
                 script_type=ScriptType.PYTHON,
-                main_function='main' if has_main_function else None,
                 arguments=arguments,
                 has_main_block=has_main_block,
                 is_executable=is_executable,
@@ -511,32 +504,19 @@ class ScriptAnalyzer:
         # Logic moved to ScriptLoader to only apply when collisions occur
         return base_name
     
-    def _has_main_function(self, tree: ast.AST) -> bool:
-        """Check if the script has a main() function."""
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == 'main':
-                return True
-        return False
     
     def _has_main_block(self, source_code: str) -> bool:
         """Check if the script has if __name__ == "__main__": block."""
         return 'if __name__ == "__main__"' in source_code or "if __name__ == '__main__'" in source_code
     
     def _extract_arguments(self, tree: ast.AST, source_code: str) -> List[ArgumentInfo]:
-        """Extract argument information from the script."""
-        arguments = []
-        
+        """Extract argument information from the script.
+
+        Only argparse arguments are supported for subprocess execution.
+        """
         # Look for argparse usage
-        argparse_args = self._extract_argparse_arguments(tree)
-        if argparse_args:
-            arguments.extend(argparse_args)
-        
-        # If no argparse found, check main function signature
-        if not arguments:
-            main_args = self._extract_main_function_arguments(tree)
-            if main_args:
-                arguments.extend(main_args)
-        
+        arguments = self._extract_argparse_arguments(tree)
+
         logger.debug(f"Extracted {len(arguments)} arguments: {[arg.name for arg in arguments]}")
         return arguments
     
@@ -620,43 +600,15 @@ class ScriptAnalyzer:
             logger.debug(f"Error parsing add_argument call: {e}")
             return None
     
-    def _extract_main_function_arguments(self, tree: ast.AST) -> List[ArgumentInfo]:
-        """Extract arguments from main function signature."""
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == 'main':
-                arguments = []
-                for arg in node.args.args:
-                    # Skip 'self' parameter
-                    if arg.arg == 'self':
-                        continue
-                    
-                    arguments.append(ArgumentInfo(
-                        name=arg.arg,
-                        required=True,  # Function arguments are generally required
-                        type="str"
-                    ))
-                
-                return arguments
-        
-        return []
     
     def _determine_execution_strategy(self, has_main_function: bool, has_main_block: bool, arguments: List[ArgumentInfo]) -> ExecutionStrategy:
-        """Determine the best execution strategy for the script."""
+        """Determine the execution strategy for the script.
 
-        # If script has arguments, prefer subprocess execution for easier argument passing
-        if arguments:
-            return ExecutionStrategy.SUBPROCESS
-
-        # If has main function, prefer function call
-        if has_main_function:
-            return ExecutionStrategy.FUNCTION_CALL
-
-        # If has main block, use subprocess
-        if has_main_block:
-            return ExecutionStrategy.SUBPROCESS
-
-        # Default to module execution
-        return ExecutionStrategy.MODULE_EXEC
+        For Python scripts, always use SUBPROCESS to ensure isolation and prevent UI freezes.
+        Scripts run in separate processes with timeout protection.
+        """
+        # All Python scripts use subprocess execution for safety and isolation
+        return ExecutionStrategy.SUBPROCESS
 
     def _has_executable_code(self, tree: ast.AST) -> bool:
         """Check if script has any executable code beyond imports."""

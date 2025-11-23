@@ -71,12 +71,12 @@ Scripts communicate results via JSON output:
 {"success": true, "message": "Operation completed"}
 ```
 
-### Execution Strategies
+### Execution Strategy
 
-Based on AST analysis, scripts are executed using:
-- **SUBPROCESS**: For scripts with `if __name__ == '__main__'` blocks
-- **FUNCTION_CALL**: For scripts with main() functions
-- **MODULE_EXEC**: For simple scripts without main blocks
+All Python scripts execute as isolated subprocesses:
+- **SUBPROCESS**: All Python scripts run in separate processes for UI safety and isolation
+- **SERVICE**: Long-running background scripts configured as services
+- **POWERSHELL/BATCH/SHELL**: Non-Python scripts execute via their respective interpreters
 
 ## Key Development Guidelines
 

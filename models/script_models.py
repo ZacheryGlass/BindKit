@@ -281,15 +281,18 @@ class ScriptExecutionModel(QObject):
         
         logger.info("ScriptExecutionModel initialized")
     
-    def execute_script(self, script_name: str, arguments: Optional[Dict[str, Any]] = None, async_execution: bool = True) -> bool:
-        """Execute a script with optional arguments
+    def execute_script(self, script_name: str, arguments: Optional[Dict[str, Any]] = None) -> bool:
+        """Execute a script with optional arguments.
+
+        All scripts execute asynchronously in background worker threads with subprocess isolation.
+        This prevents any script from freezing the UI.
 
         Args:
             script_name: Name of the script to execute
             arguments: Optional arguments for the script
-            async_execution: If True, execute in background thread. If False, execute synchronously.
-                            Note: FUNCTION_CALL and MODULE_EXEC strategies always execute synchronously
-                            on the main thread to allow creation of PyQt6 objects.
+
+        Returns:
+            True if execution started successfully, False otherwise
         """
         try:
             # Check if script is already running (thread-safe)
@@ -304,16 +307,7 @@ class ScriptExecutionModel(QObject):
                 self.script_execution_failed.emit(script_name, f"Script not found: {script_name}")
                 return False
 
-            # Import ExecutionStrategy here to avoid circular imports
-            from core.script_analyzer import ExecutionStrategy
-
-            # Force synchronous execution for FUNCTION_CALL and MODULE_EXEC strategies
-            # These strategies execute script functions directly and may create PyQt6 objects,
-            # which must happen on the main thread
-            if script_info.execution_strategy in (ExecutionStrategy.FUNCTION_CALL, ExecutionStrategy.MODULE_EXEC):
-                async_execution = False
-
-            logger.info(f"Executing script: {script_name} (async={async_execution})")
+            logger.info(f"Executing script: {script_name}")
             self.script_execution_started.emit(script_name)
 
             # Determine script key for execution (canonical identifier)
@@ -321,37 +315,20 @@ class ScriptExecutionModel(QObject):
             if not script_key:
                 script_key = script_info.file_path.stem.lower()
 
-            if async_execution:
-                # Create and start worker thread
-                worker = ScriptExecutionWorker(self._script_loader, script_key, arguments or {})
-                
-                # Connect signals
-                worker.execution_completed.connect(lambda result: self._handle_execution_completed(script_name, result))
-                worker.execution_failed.connect(lambda error: self._handle_execution_failed(script_name, error))
-                worker.finished.connect(lambda: self._cleanup_worker(script_name))
-                
-                # Store worker and start execution (thread-safe)
-                with self._worker_lock:
-                    self._active_workers[script_name] = worker
-                worker.start()
-                
-                return True  # Execution started successfully
-            else:
-                # Synchronous execution (fallback for compatibility)
-                result = self._script_loader.execute_script(script_key, arguments or {})
-                
-                # Store result
-                self._execution_results[script_name] = result
-                
-                if result.get('success', False):
-                    self.script_execution_completed.emit(script_name, result)
-                    logger.info(f"Script execution completed: {script_name}")
-                else:
-                    error_msg = result.get('message', 'Unknown error')
-                    self.script_execution_failed.emit(script_name, error_msg)
-                    logger.error(f"Script execution failed: {script_name} - {error_msg}")
-                
-                return result.get('success', False)
+            # Create and start worker thread
+            worker = ScriptExecutionWorker(self._script_loader, script_key, arguments or {})
+
+            # Connect signals
+            worker.execution_completed.connect(lambda result: self._handle_execution_completed(script_name, result))
+            worker.execution_failed.connect(lambda error: self._handle_execution_failed(script_name, error))
+            worker.finished.connect(lambda: self._cleanup_worker(script_name))
+
+            # Store worker and start execution (thread-safe)
+            with self._worker_lock:
+                self._active_workers[script_name] = worker
+            worker.start()
+
+            return True  # Execution started successfully
             
         except Exception as e:
             error_msg = f"Error executing script {script_name}: {str(e)}"
@@ -470,20 +447,28 @@ class ScriptExecutionModel(QObject):
             worker.deleteLater()
             logger.debug(f"Cleaned up finished thread: {script_name}")
     
-    def execute_script_with_preset(self, script_name: str, preset_name: str, async_execution: bool = True) -> bool:
-        """Execute a script with a specific preset configuration"""
+    def execute_script_with_preset(self, script_name: str, preset_name: str) -> bool:
+        """Execute a script with a specific preset configuration.
+
+        Args:
+            script_name: Name of the script to execute
+            preset_name: Name of the preset configuration to use
+
+        Returns:
+            True if execution started successfully, False otherwise
+        """
         try:
             script_info = self._script_collection.get_script_by_name(script_name)
             if not script_info:
                 self.script_execution_failed.emit(script_name, f"Script not found: {script_name}")
                 return False
-            
+
             # Get script key for settings lookup
             script_key = getattr(script_info, 'identifier', None) or script_info.file_path.stem.lower()
             preset_args = self._settings.get_preset_arguments(script_key, preset_name)
-            
+
             logger.info(f"Executing script {script_name} with preset '{preset_name}': {preset_args}")
-            return self.execute_script(script_name, preset_args, async_execution)
+            return self.execute_script(script_name, preset_args)
             
         except Exception as e:
             error_msg = f"Error executing script {script_name} with preset {preset_name}: {str(e)}"
