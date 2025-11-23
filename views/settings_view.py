@@ -264,9 +264,9 @@ class SettingsView(QDialog):
         font_row = QHBoxLayout()
         font_row.addWidget(QLabel("Font size (pt):"))
         self.font_size_slider = QSlider(Qt.Orientation.Horizontal)
-        self.font_size_slider.setRange(9, 18)
+        self.font_size_slider.setRange(90, 180)  # 10x resolution for smoother sliding
         self.font_size_slider.setSingleStep(1)
-        self.font_size_slider.setPageStep(1)
+        self.font_size_slider.setPageStep(10)
         self.font_size_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.font_size_slider.setMinimumWidth(560)
         self.font_size_slider.setFixedHeight(36)
@@ -280,16 +280,16 @@ class SettingsView(QDialog):
         self.font_size_value_label.setStyleSheet("background: transparent;")
         font_row.addWidget(self.font_size_value_label)
         font_row.addStretch()
-        self.font_size_slider.setValue(11)
+        self.font_size_slider.setValue(110)  # 11pt * 10
         theme_layout.addLayout(font_row)
 
         # Layout density control
         density_row = QHBoxLayout()
         density_row.addWidget(QLabel("Layout density:"))
         self.layout_density_slider = QSlider(Qt.Orientation.Horizontal)
-        self.layout_density_slider.setRange(80, 140)  # represent 0.80-1.40 in hundredths
+        self.layout_density_slider.setRange(800, 1400)  # 10x resolution for smoother sliding (0.800-1.400)
         self.layout_density_slider.setSingleStep(1)
-        self.layout_density_slider.setPageStep(5)
+        self.layout_density_slider.setPageStep(50)
         self.layout_density_slider.setTickPosition(QSlider.TickPosition.NoTicks)
         self.layout_density_slider.setMinimumWidth(560)
         self.layout_density_slider.setFixedHeight(36)
@@ -573,17 +573,6 @@ class SettingsView(QDialog):
             tooltip = f"Current hotkey: {hotkey}\nClick to change" if hotkey else "No hotkey set. Click to change"
             self.show_menu_hotkey_btn.setToolTip(tooltip)
 
-    def _on_font_size_slider_changed(self, value: int):
-        """Emit font size changes with slider feedback."""
-        self._update_font_size_display(value)
-        self.font_size_changed.emit(value)
-
-    def _on_density_slider_changed(self, slider_value: int):
-        """Emit layout density changes as padding scale updates."""
-        scale = self._slider_value_to_scale(slider_value)
-        self._update_density_display(scale)
-        self.padding_scale_changed.emit(scale)
-
     def _on_follow_system_toggled(self, checked: bool):
         """Enable/disable theme combo based on follow system setting."""
         if self.theme_combo:
@@ -615,8 +604,10 @@ class SettingsView(QDialog):
             except (TypeError, ValueError):
                 font_value = 11
             font_value = max(9, min(18, font_value))
+            # Convert to 10x resolution for slider (9-18 -> 90-180)
+            slider_value = font_value * 10
             block = self.font_size_slider.blockSignals(True)
-            self.font_size_slider.setValue(font_value)
+            self.font_size_slider.setValue(slider_value)
             self.font_size_slider.blockSignals(block)
             self._update_font_size_display(font_value)
         if self.layout_density_slider:
@@ -633,8 +624,10 @@ class SettingsView(QDialog):
 
     def _on_font_size_slider_changed(self, value: int):
         """Emit font size changes with slider feedback."""
-        self._update_font_size_display(value)
-        self.font_size_changed.emit(value)
+        # Convert from 10x resolution (90-180) to actual font size (9-18)
+        actual_font_size = round(value / 10)
+        self._update_font_size_display(actual_font_size)
+        self.font_size_changed.emit(actual_font_size)
 
     def _on_density_slider_changed(self, slider_value: int):
         """Emit layout density changes as padding scale updates."""
@@ -655,8 +648,8 @@ class SettingsView(QDialog):
     @staticmethod
     def _slider_value_to_scale(slider_value: int) -> float:
         """Convert slider position to padding scale (0.80 - 1.40)."""
-        slider_value = max(80, min(140, slider_value))
-        return round(slider_value / 100.0, 2)
+        slider_value = max(800, min(1400, slider_value))
+        return round(slider_value / 1000.0, 2)
     
     @staticmethod
     def _scale_to_slider_value(scale: float) -> int:
@@ -666,7 +659,7 @@ class SettingsView(QDialog):
         except (TypeError, ValueError):
             scale = 1.0
         scale = max(0.8, min(1.4, scale))
-        return int(round(scale * 100))
+        return int(round(scale * 1000))
     
     def update_script_list(self, scripts: List[Dict[str, Any]]):
         """Update the scripts table"""
