@@ -113,7 +113,22 @@ echo -e "   Target (Other):   ${GREEN}$OTHER_BRANCH${NC} ($OTHER_PATH)"
 echo ""
 
 # ------------------------------------------------------------------------------
-# 2. Safety Checks (Uncommitted Changes)
+# 2. Cleanup (Remove spurious files)
+# ------------------------------------------------------------------------------
+
+# Clean up 'nul' file if it exists (created by Windows redirect errors)
+if [[ -f "$CURRENT_PATH/nul" ]]; then
+    rm -f "$CURRENT_PATH/nul"
+    log_info "Cleaned up 'nul' file in current worktree"
+fi
+
+if [[ -f "$OTHER_PATH/nul" ]]; then
+    rm -f "$OTHER_PATH/nul"
+    log_info "Cleaned up 'nul' file in other worktree"
+fi
+
+# ------------------------------------------------------------------------------
+# 3. Safety Checks (Uncommitted Changes)
 # ------------------------------------------------------------------------------
 
 log_step "Checking for uncommitted changes..."
@@ -133,7 +148,7 @@ fi
 log_success "Both worktrees are clean."
 
 # ------------------------------------------------------------------------------
-# 3. Rebase (Current onto Other)
+# 4. Rebase (Current onto Other)
 # ------------------------------------------------------------------------------
 
 log_step "Rebasing '$CURRENT_BRANCH' onto '$OTHER_BRANCH'..."
@@ -155,7 +170,7 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 4. Sync Other Worktree
+# 5. Sync Other Worktree
 # ------------------------------------------------------------------------------
 
 log_step "Fast-forwarding '$OTHER_BRANCH'..."
