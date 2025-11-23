@@ -105,3 +105,66 @@ QSlider[appearanceSlider="true"]::handle:horizontal {
 QSlider[appearanceSlider="true"]::handle:horizontal:hover {
     background: #4ADE8B;
 }
+
+/* Scrollbars - modern, thin design */
+QScrollBar:vertical {
+    background: #13201B;
+    width: 10px;
+    margin: 0px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical {
+    background: #274239;
+    min-height: 30px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #2ECC71;
+}
+
+QScrollBar::handle:vertical:pressed {
+    background: #4ADE8B;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+QScrollBar:horizontal {
+    background: #13201B;
+    height: 10px;
+    margin: 0px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:horizontal {
+    background: #274239;
+    min-width: 30px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background: #2ECC71;
+}
+
+QScrollBar::handle:horizontal:pressed {
+    background: #4ADE8B;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: none;
+}

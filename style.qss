@@ -372,57 +372,67 @@ QLabel[class="disabled"] {
     color: #6E6F78;
 }
 
-/* Scrollbar Styling */
+/* Scrollbar Styling - modern, thin design */
 QScrollBar:vertical {
-    background-color: #282930;
-    width: 12px;
-    border-radius: 6px;
-    margin: 0;
+    background: #282930;
+    width: 10px;
+    margin: 0px;
+    border-radius: 5px;
 }
 
 QScrollBar::handle:vertical {
-    background-color: #4A4B54;
-    border-radius: 6px;
-    min-height: 20px;
-    margin: 2px;
+    background: #4A4B54;
+    min-height: 30px;
+    border-radius: 5px;
 }
 
 QScrollBar::handle:vertical:hover {
-    background-color: #5A5B64;
+    background: #5A5B64;
 }
 
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+QScrollBar::handle:vertical:pressed {
+    background: #6A6B74;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
     height: 0px;
 }
 
-QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-    background: transparent;
+QScrollBar::add-page:vertical,
+QScrollBar::sub-page:vertical {
+    background: none;
 }
 
 QScrollBar:horizontal {
-    background-color: #282930;
-    height: 12px;
-    border-radius: 6px;
-    margin: 0;
+    background: #282930;
+    height: 10px;
+    margin: 0px;
+    border-radius: 5px;
 }
 
 QScrollBar::handle:horizontal {
-    background-color: #4A4B54;
-    border-radius: 6px;
-    min-width: 20px;
-    margin: 2px;
+    background: #4A4B54;
+    min-width: 30px;
+    border-radius: 5px;
 }
 
 QScrollBar::handle:horizontal:hover {
-    background-color: #5A5B64;
+    background: #5A5B64;
 }
 
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+QScrollBar::handle:horizontal:pressed {
+    background: #6A6B74;
+}
+
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
     width: 0px;
 }
 
-QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-    background: transparent;
+QScrollBar::add-page:horizontal,
+QScrollBar::sub-page:horizontal {
+    background: none;
 }
 
 /* Dialog Button Box */
