@@ -60,16 +60,16 @@ BindKit is a PyQt6 tray application that loads standalone Python scripts from th
 
 ### GUI modules
 - `gui/tray_manager.py`: builds the tray context menu, reflects script status, and surfaces actions
-- `views/schedule_view.py`: schedule tab (enablement, interval, Run Now)
+- `views/schedule_view.py`: schedule tab (enablement, interval configuration)
 - `gui/settings_dialog.py`: hosts tabs for General, Hotkeys, Scripts, and Schedule
 - `gui/hotkey_configurator.py`: modal dialog for capturing key combinations
 
 ## Script pipeline
-1. **Discovery** – loader scans directories, ignoring `__*.py` and caches errors
-2. **Analysis** – analyzer inspects AST, extracts CLI metadata, picks execution strategy
-3. **Registration** – results stored as `ScriptInfo` objects and surfaced in the UI
-4. **Execution** – tray/hotkey/schedule triggers call `ScriptExecutor.execute_script`
-5. **Result handling** – executor normalizes JSON output, stores history, and updates menu text
+1. **Discovery** ï¿½ loader scans directories, ignoring `__*.py` and caches errors
+2. **Analysis** ï¿½ analyzer inspects AST, extracts CLI metadata, picks execution strategy
+3. **Registration** ï¿½ results stored as `ScriptInfo` objects and surfaced in the UI
+4. **Execution** ï¿½ tray/hotkey/schedule triggers call `ScriptExecutor.execute_script`
+5. **Result handling** ï¿½ executor normalizes JSON output, stores history, and updates menu text
 
 ### Execution strategies
 | Strategy | When chosen | Behavior |

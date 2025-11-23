@@ -5,7 +5,6 @@ Provides interface for:
 - Enabling/disabling schedules per-script
 - Setting execution intervals
 - Viewing last run and next scheduled run times
-- Manual execution trigger for testing
 """
 
 import logging
@@ -13,8 +12,8 @@ from typing import List, Optional, Dict
 from datetime import datetime
 from core.schedule_runtime import ScheduleRuntime
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox, QPushButton,
-    QSpinBox, QComboBox, QGroupBox, QMessageBox, QTableWidget,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox,
+    QSpinBox, QComboBox, QGroupBox, QTableWidget,
     QTableWidgetItem, QHeaderView, QAbstractItemView, QLineEdit
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
@@ -30,7 +29,6 @@ class ScheduleView(QWidget):
     Signals:
     - schedule_enabled_changed: Emitted when enabling/disabling a schedule
     - schedule_interval_changed: Emitted when interval is changed
-    - run_now_requested: Emitted when "Run Now" button is clicked
     - schedule_info_requested: Emitted when schedule info should be fetched for a script
     """
 
@@ -38,7 +36,6 @@ class ScheduleView(QWidget):
     schedule_interval_changed = pyqtSignal(str, int)  # script_name, interval_seconds
     schedule_type_changed = pyqtSignal(str, str)  # script_name, schedule_type (interval/cron)
     cron_expression_changed = pyqtSignal(str, str)  # script_name, cron_expression
-    run_now_requested = pyqtSignal(str)  # script_name
     schedule_info_requested = pyqtSignal(str)  # script_name
 
     def __init__(self, parent=None):
@@ -147,15 +144,6 @@ class ScheduleView(QWidget):
         self.next_runs_preview_widget.setLayout(next_runs_layout)
         controls_layout.addWidget(self.next_runs_preview_widget)
         self.next_runs_preview_widget.setVisible(False)  # Initially hidden
-
-        # Run Now button row
-        button_row_layout = QHBoxLayout()
-        button_row_layout.addStretch()
-        self.run_now_button = QPushButton("Run Now")
-        self.run_now_button.clicked.connect(self._on_run_now_clicked)
-        self.run_now_button.setEnabled(False)
-        button_row_layout.addWidget(self.run_now_button)
-        controls_layout.addLayout(button_row_layout)
 
         controls_group.setLayout(controls_layout)
         layout.addWidget(controls_group)
@@ -479,15 +467,6 @@ class ScheduleView(QWidget):
         logger.debug(f"CRON expression changed for {self.selected_script}: {cron_expr}")
         self.cron_expression_changed.emit(self.selected_script, cron_expr)
 
-    def _on_run_now_clicked(self):
-        """Handle Run Now button click."""
-        if not self.selected_script:
-            QMessageBox.warning(self, "No Script", "Please select a script first.")
-            return
-
-        logger.debug(f"Run Now requested for {self.selected_script}")
-        self.run_now_requested.emit(self.selected_script)
-
     def _update_config_panel(self, script_name: Optional[str]):
         """
         Update configuration panel for selected script.
@@ -499,8 +478,7 @@ class ScheduleView(QWidget):
         widgets = [
             self.schedule_enabled_checkbox,
             self.interval_spinbox,
-            self.interval_unit_combo,
-            self.run_now_button
+            self.interval_unit_combo
         ]
 
         for widget in widgets:
@@ -511,12 +489,10 @@ class ScheduleView(QWidget):
                 self.schedule_enabled_checkbox.setEnabled(False)
                 self.interval_spinbox.setEnabled(False)
                 self.interval_unit_combo.setEnabled(False)
-                self.run_now_button.setEnabled(False)
             else:
                 self.schedule_enabled_checkbox.setEnabled(True)
                 self.interval_spinbox.setEnabled(True)
                 self.interval_unit_combo.setEnabled(True)
-                self.run_now_button.setEnabled(True)
         finally:
             # Always unblock signals
             for widget in widgets:

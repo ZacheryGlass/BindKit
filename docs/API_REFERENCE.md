@@ -166,7 +166,6 @@ from views.schedule_view import ScheduleView
 #### Signals
 - `schedule_enabled_changed(str, bool)`: Emitted when enabling/disabling (script_name, enabled)
 - `schedule_interval_changed(str, int)`: Emitted when interval changes (script_name, interval_seconds)
-- `run_now_requested(str)`: Emitted when manual execution requested (script_name)
 
 #### Methods
 

@@ -684,7 +684,6 @@ class MVCApplication:
         self._settings_view.schedule_interval_changed.connect(self._settings_controller.set_schedule_interval)
         self._settings_view.schedule_type_changed.connect(self._settings_controller.set_schedule_type)
         self._settings_view.cron_expression_changed.connect(self._settings_controller.set_cron_expression)
-        self._settings_view.run_now_requested.connect(self._settings_controller.run_scheduled_script_now)
         # Connect schedule view's info request to controller
         self._settings_view.schedule_view.schedule_info_requested.connect(self._settings_controller.on_schedule_info_requested)
         self._settings_view.reset_requested.connect(self._settings_controller.reset_settings)

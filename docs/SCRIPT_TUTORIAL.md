@@ -125,12 +125,12 @@ def main():
 ## Scheduling-friendly practices
 - Keep executions idempotent; schedules may run while a manual call is queued
 - Respect the `arguments` persisted in settings; default to safe values
-- Finish quickly—if your script might take a long time, convert it into a service and trigger actions through IPC or files
+- Finish quicklyï¿½if your script might take a long time, convert it into a service and trigger actions through IPC or files
 
 ## Debugging scripts
 1. Run the script manually: `python scripts/my_script.py --help`
 2. Launch BindKit with `python main.py --minimized` and check `logs/app.log`
-3. Use the Settings dialog to configure arguments and test `Run Now`
+3. Use the Settings dialog to configure arguments and trigger via hotkey or schedule
 4. For subprocess scripts, inspect captured stdout/stderr in the BindKit notification
 
 ## Common pitfalls

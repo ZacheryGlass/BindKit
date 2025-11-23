@@ -67,7 +67,6 @@ class SettingsView(QDialog):
     schedule_interval_changed = pyqtSignal(str, int)  # script_name, interval_seconds
     schedule_type_changed = pyqtSignal(str, str)  # script_name, schedule_type
     cron_expression_changed = pyqtSignal(str, str)  # script_name, cron_expression
-    run_now_requested = pyqtSignal(str)  # script_name
 
     # Reset operations
     reset_requested = pyqtSignal(str)  # category
@@ -491,7 +490,6 @@ class SettingsView(QDialog):
         self.schedule_view.schedule_interval_changed.connect(self.schedule_interval_changed.emit)
         self.schedule_view.schedule_type_changed.connect(self.schedule_type_changed.emit)
         self.schedule_view.cron_expression_changed.connect(self.cron_expression_changed.emit)
-        self.schedule_view.run_now_requested.connect(self.run_now_requested.emit)
 
         # Add tab
         self.tab_widget.addTab(self.schedule_view, "Schedule")

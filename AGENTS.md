@@ -136,8 +136,7 @@ The scheduler enables time-based execution of scripts at regular intervals, with
 3. Select a script from the list
 4. Check "Enable Schedule" to activate scheduling
 5. Set the interval using the spinbox and unit dropdown
-6. Click "Run Now" to manually trigger the script for testing
-7. View "Last run" and "Next run" timestamps to monitor execution
+6. View "Last run" and "Next run" timestamps to monitor execution
 
 ## Important Files
 

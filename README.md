@@ -20,7 +20,6 @@ BindKit is a PyQt6 system tray application for Windows that discovers standalone
 
 ### Scheduler and services
 - **Interval scheduling** with per-script enablement, 10 second to ~24.8 day limits, overlap prevention, and persisted timestamps
-- **Manual "Run Now" testing** inside the Schedule tab to confirm arguments and permissions
 - **Service runtime** for long-running/background scripts using detached Win32 processes, job objects, and rotating logs
 - **Graceful shutdown** that stops services, cancels timers, and flushes logs on exit
 
@@ -115,11 +114,11 @@ Drop additional scripts into `scripts/` or add external paths from the Settings 
 
 ## Further reading
 
-- `docs/ARCHITECTURE.md` – system overview and component responsibilities
-- `docs/API_REFERENCE.md` – public Python APIs for settings, hotkeys, and runtimes
-- `docs/SCRIPT_TUTORIAL.md` – step-by-step guide for building high-quality scripts
-- `docs/SCHEDULER_GUIDE.md` – scheduler UX, signals, and troubleshooting
-- `docs/HOTKEY_FEATURE.md` – hotkey UX deep dive
+- `docs/ARCHITECTURE.md` ï¿½ system overview and component responsibilities
+- `docs/API_REFERENCE.md` ï¿½ public Python APIs for settings, hotkeys, and runtimes
+- `docs/SCRIPT_TUTORIAL.md` ï¿½ step-by-step guide for building high-quality scripts
+- `docs/SCHEDULER_GUIDE.md` ï¿½ scheduler UX, signals, and troubleshooting
+- `docs/HOTKEY_FEATURE.md` ï¿½ hotkey UX deep dive
 
 ## Troubleshooting
 

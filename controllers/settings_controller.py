@@ -964,27 +964,6 @@ class SettingsController(QObject):
             self.error_occurred.emit("CRON Error", f"Failed to set CRON expression: {str(e)}")
             return False
 
-    def run_scheduled_script_now(self, script_name: str) -> bool:
-        """Manually trigger a scheduled script to run immediately.
-
-        Args:
-            script_name: Name of the script (display name or original name)
-
-        Returns:
-            True if execution started successfully, False otherwise
-        """
-        logger.info(f"Running scheduled script now: {script_name}")
-
-        try:
-            # Just execute the script normally
-            self._script_controller.execute_script(script_name)
-            return True
-
-        except Exception as e:
-            logger.error(f"Error running scheduled script: {e}")
-            self.error_occurred.emit("Execution Error", f"Failed to run script: {str(e)}")
-            return False
-
     def get_schedule_info_for_display(self, script_name: str) -> Optional[Dict[str, Any]]:
         """Get schedule information formatted for UI display.
 
