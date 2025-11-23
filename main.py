@@ -663,6 +663,16 @@ class MVCApplication:
         # Create settings view
         self._settings_view = SettingsView(self.main_view)
 
+        # Populate available themes from theme manager
+        try:
+            available_themes = self._settings_controller._theme_manager.available_themes()
+            self._settings_view.set_available_themes(available_themes)
+        except Exception as e:
+            self.logger.warning(f"Failed to load themes: {e}")
+            # Fallback to default theme to ensure settings dialog remains usable
+            from core.theme_manager import ThemeManager
+            self._settings_view.set_available_themes([ThemeManager.DEFAULT_THEME_NAME])
+
         # Store settings view reference in controller so it can update schedule tab
         self._settings_controller._settings_view = self._settings_view
 

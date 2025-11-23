@@ -255,7 +255,7 @@ class SettingsView(QDialog):
         row = QHBoxLayout()
         row.addWidget(QLabel("Color theme:"))
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems(["Onyx", "Quartz", "Slate", "Jade", "Sapphire"])  # keep in sync with resources/themes
+        # Themes will be populated dynamically via set_available_themes()
         self.theme_combo.setMinimumWidth(120)  # Ensure full theme names are visible
         self.theme_combo.currentTextChanged.connect(self.theme_changed.emit)
         row.addWidget(self.theme_combo)
@@ -648,6 +648,37 @@ class SettingsView(QDialog):
             block = self.launcher_show_hotkeys_checkbox.blockSignals(True)
             self.launcher_show_hotkeys_checkbox.setChecked(show)
             self.launcher_show_hotkeys_checkbox.blockSignals(block)
+
+    def set_available_themes(self, themes: List[str]):
+        """Populate the theme combo box with available themes.
+
+        Args:
+            themes: List of theme names (without .qss extension)
+        """
+        if self.theme_combo:
+            # Handle edge case: empty theme list (fallback to ensure usability)
+            if not themes:
+                from core.theme_manager import ThemeManager
+                logger.warning("No themes available, using fallback default theme")
+                themes = [ThemeManager.DEFAULT_THEME_NAME]
+
+            # Store current selection to restore it after repopulating
+            current_theme = self.theme_combo.currentText()
+
+            # Block signals to prevent theme_changed from firing during population
+            block = self.theme_combo.blockSignals(True)
+
+            # Clear and repopulate
+            self.theme_combo.clear()
+            self.theme_combo.addItems(themes)
+
+            # Restore previous selection if it still exists
+            if current_theme:
+                idx = self.theme_combo.findText(current_theme)
+                if idx >= 0:
+                    self.theme_combo.setCurrentIndex(idx)
+
+            self.theme_combo.blockSignals(block)
 
     def _on_font_size_slider_moved(self, value: int):
         """Update font size display during slider drag without applying theme."""
