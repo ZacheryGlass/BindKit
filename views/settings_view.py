@@ -273,7 +273,9 @@ class SettingsView(QDialog):
         self.font_size_slider.style().unpolish(self.font_size_slider)
         self.font_size_slider.style().polish(self.font_size_slider)
         self.font_size_slider.update()
-        self.font_size_slider.valueChanged.connect(self._on_font_size_slider_changed)
+        # Update label during drag, emit signal on release to avoid theme reapplication during drag
+        self.font_size_slider.sliderMoved.connect(self._on_font_size_slider_moved)
+        self.font_size_slider.sliderReleased.connect(self._on_font_size_slider_released)
         font_row.addWidget(self.font_size_slider, 2)
         self.font_size_value_label = QLabel("11 pt")
         self.font_size_value_label.setStyleSheet("background: transparent;")
@@ -296,7 +298,9 @@ class SettingsView(QDialog):
         self.layout_density_slider.style().unpolish(self.layout_density_slider)
         self.layout_density_slider.style().polish(self.layout_density_slider)
         self.layout_density_slider.update()
-        self.layout_density_slider.valueChanged.connect(self._on_density_slider_changed)
+        # Update label during drag, emit signal on release to avoid theme reapplication during drag
+        self.layout_density_slider.sliderMoved.connect(self._on_density_slider_moved)
+        self.layout_density_slider.sliderReleased.connect(self._on_density_slider_released)
         density_row.addWidget(self.layout_density_slider, 2)
         self.layout_density_value_label = QLabel("1.00x")
         self.layout_density_value_label.setStyleSheet("background: transparent;")
@@ -620,17 +624,27 @@ class SettingsView(QDialog):
             self.layout_density_slider.blockSignals(block)
             self._update_density_display(self._slider_value_to_scale(slider_value))
 
-    def _on_font_size_slider_changed(self, value: int):
-        """Emit font size changes with slider feedback."""
+    def _on_font_size_slider_moved(self, value: int):
+        """Update font size display during slider drag without applying theme."""
         # Convert from 10x resolution (90-180) to actual font size (9-18)
         actual_font_size = round(value / 10)
         self._update_font_size_display(actual_font_size)
+
+    def _on_font_size_slider_released(self):
+        """Emit font size change signal when slider is released to apply theme."""
+        value = self.font_size_slider.value()
+        actual_font_size = round(value / 10)
         self.font_size_changed.emit(actual_font_size)
 
-    def _on_density_slider_changed(self, slider_value: int):
-        """Emit layout density changes as padding scale updates."""
+    def _on_density_slider_moved(self, slider_value: int):
+        """Update density display during slider drag without applying theme."""
         scale = self._slider_value_to_scale(slider_value)
         self._update_density_display(scale)
+
+    def _on_density_slider_released(self):
+        """Emit density change signal when slider is released to apply theme."""
+        slider_value = self.layout_density_slider.value()
+        scale = self._slider_value_to_scale(slider_value)
         self.padding_scale_changed.emit(scale)
     
     def _update_font_size_display(self, value: int):
