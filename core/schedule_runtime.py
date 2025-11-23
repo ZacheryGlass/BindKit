@@ -52,6 +52,7 @@ class ScheduleHandle:
     timer: QTimer
     interval_seconds: Optional[int] = None  # For INTERVAL type
     cron_expression: Optional[str] = None  # For CRON type
+    cron_iterator: Optional[Any] = None  # croniter object to maintain state for CRON schedules
     last_run: Optional[float] = None
     next_run: Optional[float] = None
     is_executing: bool = False
@@ -197,8 +198,12 @@ class ScheduleRuntime(QObject):
             if not is_valid:
                 raise ValueError(f"Invalid CRON expression: {error_msg}")
             logger.info(f"Starting CRON schedule for '{script_name}' (expression: {cron_expression})")
-            timer_delay_ms = self._calculate_cron_delay_to_next_run(cron_expression) * 1000
-            next_run = time.time() + (timer_delay_ms / 1000)
+            # Create croniter object to maintain state and prevent execution skips
+            cron_iter = croniter(cron_expression, datetime.now())
+            next_run_timestamp = cron_iter.get_next(float)
+            delay_seconds = max(1, int(next_run_timestamp - time.time()))
+            timer_delay_ms = delay_seconds * 1000
+            next_run = next_run_timestamp
 
         else:
             raise ValueError(f"Unknown schedule type: {schedule_type}")
@@ -214,6 +219,7 @@ class ScheduleRuntime(QObject):
             schedule_type=schedule_type,
             interval_seconds=interval_seconds,
             cron_expression=cron_expression,
+            cron_iterator=cron_iter if schedule_type == ScheduleType.CRON else None,
             timer=timer,
             next_run=next_run,
             execution_callback=execution_callback,
@@ -388,13 +394,17 @@ class ScheduleRuntime(QObject):
         old_cron = handle.cron_expression
         handle.cron_expression = new_cron_expression
 
-        # Recalculate delay and restart timer
-        delay_seconds = self._calculate_cron_delay_to_next_run(new_cron_expression)
+        # Recreate croniter object with new expression
+        handle.cron_iterator = croniter(new_cron_expression, datetime.now())
+        next_run_timestamp = handle.cron_iterator.get_next(float)
+        delay_seconds = max(1, int(next_run_timestamp - time.time()))
+
+        # Restart timer with new delay
         handle.timer.stop()
         handle.timer.start(delay_seconds * 1000)
 
-        # Recalculate next run
-        handle.next_run = time.time() + delay_seconds
+        # Update next run
+        handle.next_run = next_run_timestamp
 
         logger.info(f"Updated CRON for '{script_name}': {old_cron} -> {new_cron_expression}")
 
@@ -464,13 +474,27 @@ class ScheduleRuntime(QObject):
             if handle.schedule_type == ScheduleType.INTERVAL:
                 handle.next_run = current_time + handle.interval_seconds
             elif handle.schedule_type == ScheduleType.CRON:
-                # Recalculate next run from now for CRON
-                next_runs = self.get_cron_next_runs(handle.cron_expression, count=1)
-                if next_runs:
-                    handle.next_run = next_runs[0]
+                # Reuse croniter object to maintain state and prevent execution skips
+                if handle.cron_iterator:
+                    try:
+                        next_run_timestamp = handle.cron_iterator.get_next(float)
+                        # Handle edge case where croniter returns a past time (DST/NTP adjustments)
+                        while next_run_timestamp <= current_time:
+                            logger.warning(f"CRON next run {next_run_timestamp} is in the past, getting next")
+                            next_run_timestamp = handle.cron_iterator.get_next(float)
+                        handle.next_run = next_run_timestamp
+                    except Exception as e:
+                        logger.error(f"Error getting next CRON run: {e}, recreating iterator")
+                        # Recreate iterator if it fails
+                        handle.cron_iterator = croniter(handle.cron_expression, datetime.now())
+                        handle.next_run = handle.cron_iterator.get_next(float)
                 else:
-                    # Fallback if calculation fails
-                    handle.next_run = current_time + 60
+                    # Fallback if no iterator (shouldn't happen, but defensive programming)
+                    next_runs = self.get_cron_next_runs(handle.cron_expression, count=1)
+                    if next_runs:
+                        handle.next_run = next_runs[0]
+                    else:
+                        handle.next_run = current_time + 60
 
             # Update settings if available
             if settings_manager:

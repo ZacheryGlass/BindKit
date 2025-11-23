@@ -229,6 +229,11 @@ class ScriptLoader:
                         error_msg = f"External script not executable: {script_info.error}"
                         self.failed_scripts[f"{script_name} (external)"] = error_msg
                         logger.warning(f"External script {script_name} is not executable: {script_info.error}")
+                except FileNotFoundError:
+                    # Handle TOCTOU race: file was deleted between validation and analysis
+                    error_msg = f"External script {script_name} was deleted during analysis: {script_path}"
+                    self.failed_scripts[f"{script_name} (external)"] = error_msg
+                    logger.warning(error_msg)
                 except Exception as e:
                     error_msg = f"Failed to analyze external script {script_name} at {script_path}: {str(e)}"
                     self.failed_scripts[f"{script_name} (external)"] = error_msg

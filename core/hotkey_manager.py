@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Optional, Tuple, Set
+from typing import Dict, Optional, Tuple, Set, List
 from threading import Lock
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QApplication, QWidget
@@ -152,6 +152,7 @@ class HotkeyManager(QObject):
         self.hotkeys: Dict[int, Tuple[str, str]] = {}  # ID -> (script_name, hotkey_string)
         self.registered_combos: Set[str] = set()  # Track registered combinations
         self.next_id = 1
+        self._freed_ids: List[int] = []  # Track freed IDs for reuse to prevent overflow
         # Lock for thread-safe registration/unregistration operations
         self._registration_lock = Lock()
 
@@ -419,8 +420,19 @@ class HotkeyManager(QObject):
                 self.registration_failed.emit(script_name, normalized, error_msg)
                 return False
 
-            hotkey_id = self.next_id
-            self.next_id += 1
+            # Reuse freed IDs to prevent overflow, otherwise increment counter
+            if self._freed_ids:
+                hotkey_id = self._freed_ids.pop(0)
+                logger.debug(f"Reusing freed hotkey ID: {hotkey_id}")
+            else:
+                hotkey_id = self.next_id
+                self.next_id += 1
+                # Wraparound if approaching maximum safe value for 32-bit int
+                # 100,000 is well below Windows API limits and prevents potential
+                # issues with negative IDs or overflow in external APIs
+                if self.next_id > 100000:
+                    logger.warning(f"Hotkey ID counter reached {self.next_id}, wrapping around to 1")
+                    self.next_id = 1
 
             # Attempt to register with Windows using the widget's HWND
             try:
@@ -484,6 +496,8 @@ class HotkeyManager(QObject):
                 # If we get here, unregistration was successful
                 del self.hotkeys[hotkey_id]
                 self.registered_combos.discard(hotkey_string)
+                # Add freed ID to reuse pool to prevent ID overflow
+                self._freed_ids.append(hotkey_id)
                 logger.info(f"Unregistered hotkey for script {script_name}")
                 return True
 
@@ -506,6 +520,7 @@ class HotkeyManager(QObject):
 
             self.hotkeys.clear()
             self.registered_combos.clear()
+            self._freed_ids.clear()  # Clear freed IDs when all hotkeys unregistered
             logger.info("All hotkeys unregistered")
     
     def get_registered_hotkeys(self) -> Dict[str, str]:

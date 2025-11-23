@@ -8,6 +8,7 @@ import weakref
 import gc
 import os
 import threading
+import copy
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union
 from dataclasses import dataclass
@@ -800,8 +801,8 @@ class ScriptExecutor:
                 )
 
             # Create execution callback that will be called by the schedule
-            # Capture immutable copies to prevent stale data from schedule updates
-            def execution_callback(name: str, _script_info=script_info, _args=dict(arguments or {})):
+            # Deep copy script_info and args to prevent stale data if script is reloaded
+            def execution_callback(name: str, _script_info=copy.deepcopy(script_info), _args=copy.deepcopy(arguments or {})):
                 """Called when schedule timer fires."""
                 result = self.execute_script(_script_info, _args)
                 if result.success:
@@ -907,7 +908,8 @@ class ScriptExecutor:
                 )
 
             # Create execution callback
-            def execution_callback(name: str, _script_info=script_info, _args=dict(arguments or {})):
+            # Deep copy script_info and args to prevent stale data if script is reloaded
+            def execution_callback(name: str, _script_info=copy.deepcopy(script_info), _args=copy.deepcopy(arguments or {})):
                 """Called when CRON schedule fires."""
                 result = self.execute_script(_script_info, _args)
                 if result.success:
@@ -1080,43 +1082,32 @@ class ScriptExecutor:
         return count
     
     def _cleanup_module(self, module_name: str, module):
-        """Aggressively clean up a module to prevent memory retention.
-        
+        """Clean up a module to prevent memory retention.
+
+        Removes module from sys.modules and clears metadata, allowing Python's
+        garbage collector to reclaim memory naturally. Does not aggressively
+        clear __dict__ to avoid breaking GC for modules with circular references.
+
         Args:
             module_name: Name of the module being cleaned up
             module: The module object to clean up
         """
         try:
-            # Remove from sys.modules first
+            # Remove from sys.modules to allow garbage collection
             sys.modules.pop(module_name, None)
-            
-            # Clear module's __dict__ to break circular references
-            if hasattr(module, '__dict__'):
-                module_dict = module.__dict__.copy()
-                module.__dict__.clear()
-                
-                # Explicitly delete references to help garbage collection
-                for key, value in module_dict.items():
-                    try:
-                        # Clear any callable objects that might hold references
-                        if hasattr(value, '__dict__'):
-                            value.__dict__.clear()
-                    except Exception:
-                        pass  # Some objects might not allow modification
-                del module_dict
-            
-            # Clear any cached attributes
+
+            # Clear module metadata only (not __dict__ - let Python GC handle that)
             if hasattr(module, '__cached__'):
                 module.__cached__ = None
             if hasattr(module, '__spec__'):
                 module.__spec__ = None
             if hasattr(module, '__loader__'):
                 module.__loader__ = None
-                
-            logger.debug(f"Aggressively cleaned up module: {module_name}")
-            
+
+            logger.debug(f"Cleaned up module: {module_name}")
+
         except Exception as e:
-            logger.warning(f"Error during aggressive module cleanup for {module_name}: {e}")
+            logger.warning(f"Error during module cleanup for {module_name}: {e}")
     
     def get_cache_stats(self) -> Dict[str, Any]:
         """Get statistics about the module cache."""
