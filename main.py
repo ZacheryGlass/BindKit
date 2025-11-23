@@ -584,8 +584,10 @@ class MVCApplication:
             # Get script data from controller
             launcher_scripts = self.tray_controller.build_launcher_scripts()
 
-            # Get launcher display settings
-            show_hotkeys = self._settings_controller.get_launcher_show_hotkeys()
+            # Get launcher display settings (with fallback for initialization)
+            show_hotkeys = True  # Default
+            if hasattr(self, '_settings_controller') and self._settings_controller:
+                show_hotkeys = self._settings_controller.get_launcher_show_hotkeys()
 
             # Update the launcher view
             self.tray_view.update_launcher_scripts(launcher_scripts, show_hotkeys)
