@@ -440,6 +440,7 @@ class SettingsView(QDialog):
 
         # Configure table for consistent look
         self.preset_table.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.preset_table.setFocusPolicy(Qt.FocusPolicy.NoFocus)  # Prevent focus rectangle on cells
         self.preset_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.preset_table.setAlternatingRowColors(True)
         self.preset_table.verticalHeader().setVisible(False)
@@ -1049,8 +1050,9 @@ class SettingsView(QDialog):
                 self.preset_table.setRowHeight(r, p_desired)
         except Exception:
             pass
-        
-        # Selection disabled, no need to clear
+
+        # Clear current cell to prevent focus rectangle on any cell
+        self.preset_table.setCurrentCell(-1, -1)
     
     # UI event handlers
     
