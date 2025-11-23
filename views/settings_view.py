@@ -884,7 +884,11 @@ class SettingsView(QDialog):
         # Filename item
         file_item = self.script_table.item(row, 2)
         if isinstance(file_item, QTableWidgetItem):
-            file_item.setForeground(Qt.GlobalColor.gray if disabled else Qt.GlobalColor.black)
+            if disabled:
+                file_item.setForeground(Qt.GlobalColor.gray)
+            else:
+                # Reset to default theme color
+                file_item.setData(Qt.ItemDataRole.ForegroundRole, None)
         # Hotkey button
         hotkey_btn = self.script_table.cellWidget(row, 3)
         if isinstance(hotkey_btn, QPushButton):
