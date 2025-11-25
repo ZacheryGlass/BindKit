@@ -49,6 +49,8 @@ jobs:
           $ver = $tag.TrimStart('v')
           echo "VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           # Update VERSION file to match the tag
+          # IMPORTANT: VERSION file must NOT have a trailing newline (canonical format)
+          # The deploy-site workflow strips newlines when reading, supporting both formats
           Set-Content -NoNewline -Path "VERSION" -Value $ver
 
       - name: Bump version
@@ -57,6 +59,7 @@ jobs:
         shell: pwsh
         run: |
           $path = "VERSION"
+          # Create VERSION file without trailing newline if it doesn't exist
           if (!(Test-Path $path)) { '0.1.0' | Out-File -NoNewline $path }
           $version = (Get-Content $path -Raw).Trim()
           if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') { Write-Error "Invalid VERSION file: $version" }
@@ -68,6 +71,7 @@ jobs:
             default { $patch++ }
           }
           $newVersion = "$major.$minor.$patch"
+          # VERSION file must NOT have a trailing newline (canonical format)
           Set-Content -NoNewline -Path $path -Value $newVersion
           echo "VERSION=$newVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           echo "new_version=$newVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
